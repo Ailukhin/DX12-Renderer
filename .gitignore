@@ -1,6 +1,7 @@
 # Directories
 .vs/
 .x64/
+.DX12_Renderer/
 
 # Files
 *.vcxproj
