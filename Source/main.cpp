@@ -1,14 +1,14 @@
 #include <iostream>
 #include "WinInclude.h"
 #include "ComPointer.h"
+#include "DXDebugLayer.h"
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    DXDebugLayer::GetDXDebug().Init();
 
-    POINT pt;
-    GetCursorPos(&pt);
 
-    std::cout << "The cursor is x: " << pt.x << " y: " << pt.y;
+
+    DXDebugLayer::GetDXDebug().Shutdown();
 }
 
