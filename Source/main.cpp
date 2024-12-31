@@ -11,6 +11,13 @@ int main()
 
     if (DXContext::GetDXContext().Init())
     {
+        while (true)
+        {
+            auto* cmdList = DXContext::GetDXContext().InitCommandList();
+
+            DXContext::GetDXContext().ExecuteCommandList();
+        }
+
         DXContext::GetDXContext().Shutdown();
     }
 
