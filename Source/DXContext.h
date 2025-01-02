@@ -27,6 +27,14 @@ public:
 	ID3D12GraphicsCommandList6* InitCommandList();
 	void ExecuteCommandList();
 
+	inline void FlushCommandQueue(UINT count)
+	{
+		for (UINT i = 0; i < count; i++)
+		{
+			SignalAndWait();
+		}
+	}
+
 	void PrintDeviceSupportLevel();
 	void PrintCommandListSupportLevel();
 
@@ -40,12 +48,19 @@ public:
 		return m_CmdQueue;
 	}
 
+	inline ComPointer<IDXGIFactory7>& GetDXGIFactory()
+	{
+		return m_DxgiFactory;
+	}
+
 private:
 	ComPointer<ID3D12Device8> m_Device;
 	ComPointer<ID3D12CommandQueue> m_CmdQueue;
 
 	ComPointer<ID3D12CommandAllocator> m_CmdAllocator;
 	ComPointer<ID3D12GraphicsCommandList6> m_CmdList;
+
+	ComPointer<IDXGIFactory7> m_DxgiFactory;
 
 	// A fence is basically kinda like a condition variable/wait/future/promise from concurrency/multithreading, it can wait for a signal (value) to proceed otherwise block
 	// There's a shared fence flag which sounds like shared_future

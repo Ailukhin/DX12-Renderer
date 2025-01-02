@@ -2,9 +2,16 @@
 #include <stdio.h>
 #include <cassert>
 #include <cstdlib>
+#include "Window.h"
 
 bool DXContext::Init()
 {
+	// Create dxgi factory
+	if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&m_DxgiFactory))))
+	{
+		return false;
+	}
+
 	// Create Device
 	if (FAILED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Device))))
 	{
@@ -74,6 +81,7 @@ void DXContext::Shutdown()
 	m_Fence.Release();
 	m_CmdQueue.Release();
 	m_Device.Release();
+	m_DxgiFactory.Release();
 }
 
 void DXContext::SignalAndWait()

@@ -1,5 +1,6 @@
 #include "WinInclude.h"
 #include "ComPointer.h"
+#include <cassert>
 
 class DXWindow
 {
@@ -22,10 +23,16 @@ public:
 	bool Init();
 	void Shutdown();
 	void Update();
+	void Present();
 
 	inline bool GameExit() const
 	{
 		return m_GameExit;
+	}
+
+	inline UINT GetBufferCount() const
+	{
+		return bufferCount;
 	}
 
 private:
@@ -35,4 +42,7 @@ private:
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
 	bool m_GameExit = false;
+	UINT bufferCount = 0;
+
+	ComPointer<IDXGISwapChain3> m_SwapChain;
 };

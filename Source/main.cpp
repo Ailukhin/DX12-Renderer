@@ -19,7 +19,12 @@ int main()
             auto* cmdList = DXContext::GetDXContext().InitCommandList();
 
             DXContext::GetDXContext().ExecuteCommandList();
+
+            DXWindow::GetDXWindow().Present();
         }
+
+        // Flush command queue
+        DXContext::GetDXContext().FlushCommandQueue(DXWindow::GetDXWindow().GetBufferCount());
 
         DXWindow::GetDXWindow().Shutdown();
         DXContext::GetDXContext().Shutdown();

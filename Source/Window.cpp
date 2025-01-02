@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "DXContext.h"
 
 bool DXWindow::Init()
 {
@@ -54,11 +55,57 @@ bool DXWindow::Init()
                               wnd.hInstance, // Window instance
                               nullptr);
 
-    return m_Window != nullptr;
+    
+    if (m_Window == nullptr)
+    {
+        return false;
+    }
+    
+
+    // Swap chain descriptor
+    DXGI_SWAP_CHAIN_DESC1 swap_desc{};
+    swap_desc.Width = 1920;
+    swap_desc.Height = 1080;
+    swap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // Normal format for 8 bits in each color channel
+    swap_desc.Stereo = false;
+    swap_desc.SampleDesc.Count = 1; // 1 pixel per pixel
+    swap_desc.SampleDesc.Quality = 0; // Multisampling (anti-aliasing), 1 yes, 0 no
+    swap_desc.BufferUsage = DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_RENDER_TARGET_OUTPUT; // Back buffer to write to as the render target
+    swap_desc.BufferCount = 2; // 2 buffers for swapping, front is displayed while back is being written to - "swap chain"
+                               // 3 used for vsync to help prevent tearing 
+                               // with vsync, must wait for monitor to finish using a buffer, completed buffer will be waiting for sawp while 3rd is being written to
+                               // Vsync is basically doing work ahead of time and waiting to make sure the buffer swap is smooth
+    // Set internal buffer/frame count for flush later
+    bufferCount = swap_desc.BufferCount;
+    swap_desc.Scaling = DXGI_SCALING_STRETCH; // How the swap chain behaves if the window is resized
+    swap_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // How swapping the buffers is handled
+    swap_desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE; // Mode for alpha blending
+    swap_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING; // Allow swap chain to be modifiable, allow tearing aka no vsync
+
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC swap_fullscreen_desc{};
+    //swap_fullscreen_desc.RefreshRate; // These 3 values not used since widowed = true
+    //swap_fullscreen_desc.ScanlineOrdering;
+    //swap_fullscreen_desc.Scaling;
+    swap_fullscreen_desc.Windowed = true;
+
+    ComPointer<IDXGISwapChain1> swapChain1;
+    
+    // Set up swap chain
+    auto& factory = DXContext::GetDXContext().GetDXGIFactory();
+    factory->CreateSwapChainForHwnd(DXContext::GetDXContext().GetCommandQueue(), m_Window, &swap_desc, &swap_fullscreen_desc, nullptr, &swapChain1);
+
+    if (!swapChain1.QueryInterface(m_SwapChain))
+    {
+        return false;
+    }
+    
+    return true;
 }
 
 void DXWindow::Shutdown()
 {
+    m_SwapChain.Release();
+
     // If window is manually closed, destroy the window
     if (m_Window)
     {
@@ -86,6 +133,13 @@ void DXWindow::Update()
         // Call the WNDPROC to update the window
         DispatchMessageW(&msg);
     }
+}
+
+void DXWindow::Present()
+{
+    // 1st param, 0 = present immediately no sync (can tear), 1-4  sync presentation after nth vertical blank (frame?)
+    // 2nd param - https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-present
+    m_SwapChain->Present(1, 0);
 }
 
 LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
