@@ -16,8 +16,21 @@ int main()
             // Poll for window update
             DXWindow::GetDXWindow().Update();
 
+            // Check for resize after window update
+            if (DXWindow::GetDXWindow().ShouldResize())
+            {
+                // Command queue must be flushed before resize
+                DXContext::GetDXContext().FlushCommandQueue(DXWindow::GetDXWindow().GetBufferCount());
+
+                DXWindow::GetDXWindow().Resize();
+            }
+
+            // Draw
             auto* cmdList = DXContext::GetDXContext().InitCommandList();
 
+            //
+
+            // Finish drawing and present
             DXContext::GetDXContext().ExecuteCommandList();
 
             DXWindow::GetDXWindow().Present();

@@ -76,12 +76,13 @@ bool DXWindow::Init()
                                // with vsync, must wait for monitor to finish using a buffer, completed buffer will be waiting for sawp while 3rd is being written to
                                // Vsync is basically doing work ahead of time and waiting to make sure the buffer swap is smooth
     // Set internal buffer/frame count for flush later
-    bufferCount = swap_desc.BufferCount;
+    m_BufferCount = swap_desc.BufferCount;
     swap_desc.Scaling = DXGI_SCALING_STRETCH; // How the swap chain behaves if the window is resized
     swap_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // How swapping the buffers is handled
     swap_desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE; // Mode for alpha blending
     swap_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING; // Allow swap chain to be modifiable, allow tearing aka no vsync
 
+    // Full screen swap chain descriptor
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC swap_fullscreen_desc{};
     //swap_fullscreen_desc.RefreshRate; // These 3 values not used since widowed = true
     //swap_fullscreen_desc.ScanlineOrdering;
@@ -142,11 +143,33 @@ void DXWindow::Present()
     m_SwapChain->Present(1, 0);
 }
 
+void DXWindow::Resize()
+{
+    RECT clientRect;
+    if (GetClientRect(m_Window, &clientRect))
+    {
+        m_Width = clientRect.right - clientRect.left;
+        m_Height = clientRect.bottom - clientRect.top;
+
+        // DXGI_FORMAT_UNKNOWN - keep same format as before
+        // DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING - same as when creating the swap chain with descriptor in Init
+        m_SwapChain->ResizeBuffers(m_BufferCount, m_Width, m_Height, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+        m_Resize = false;
+    }
+}
+
 LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Handle windows messages
     switch (msg)
     {
+    case WM_SIZE:
+        // Checks to make sure resize isn't triggering for minimizing and maximizing the window
+        if (lParam && HIWORD(lParam) != GetDXWindow().m_Height && LOWORD(lParam) != GetDXWindow().m_Width)
+        {
+            GetDXWindow().m_Resize = true;
+        }
+        break;
     case WM_CLOSE: // Handle manual window close
         GetDXWindow().m_GameExit = true;
         return 0;

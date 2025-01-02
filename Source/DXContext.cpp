@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include "Window.h"
+#include <dxgi1_3.h>
 
 bool DXContext::Init()
 {

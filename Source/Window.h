@@ -24,6 +24,7 @@ public:
 	void Shutdown();
 	void Update();
 	void Present();
+	void Resize();
 
 	inline bool GameExit() const
 	{
@@ -32,7 +33,12 @@ public:
 
 	inline UINT GetBufferCount() const
 	{
-		return bufferCount;
+		return m_BufferCount;
+	}
+
+	inline bool ShouldResize() const
+	{
+		return m_Resize;
 	}
 
 private:
@@ -42,7 +48,12 @@ private:
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
 	bool m_GameExit = false;
-	UINT bufferCount = 0;
+
+	UINT m_BufferCount = 0;
+
+	UINT m_Width = 1920;
+	UINT m_Height = 1080;
+	bool m_Resize = false;
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
 };
