@@ -50,12 +50,15 @@ public:
 private:
 	static LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
 
+	bool GetBuffers();
+	void ReleaseBuffers();
+
 private:
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
 	bool m_GameExit = false;
 
-	UINT m_BufferCount = 0;
+	static constexpr UINT m_BufferCount = 2;
 
 	UINT m_Width = 1920;
 	UINT m_Height = 1080;
@@ -63,4 +66,5 @@ private:
 	bool m_isFullscreen = false;
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
+	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
 };

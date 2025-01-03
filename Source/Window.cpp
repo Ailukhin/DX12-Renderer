@@ -75,8 +75,6 @@ bool DXWindow::Init()
                                // 3 used for vsync to help prevent tearing 
                                // with vsync, must wait for monitor to finish using a buffer, completed buffer will be waiting for sawp while 3rd is being written to
                                // Vsync is basically doing work ahead of time and waiting to make sure the buffer swap is smooth
-    // Set internal buffer/frame count for flush later
-    m_BufferCount = swap_desc.BufferCount;
     swap_desc.Scaling = DXGI_SCALING_STRETCH; // How the swap chain behaves if the window is resized
     swap_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // How swapping the buffers is handled
     swap_desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE; // Mode for alpha blending
@@ -99,12 +97,19 @@ bool DXWindow::Init()
     {
         return false;
     }
-    
+
+    if (!GetBuffers())
+    {
+        return false;
+    }
+
     return true;
 }
 
 void DXWindow::Shutdown()
 {
+    ReleaseBuffers();
+
     m_SwapChain.Release();
 
     // If window is manually closed, destroy the window
@@ -145,6 +150,9 @@ void DXWindow::Present()
 
 void DXWindow::Resize()
 {
+    // Buffer references must be released before resizing
+    ReleaseBuffers();
+
     RECT clientRect;
     if (GetClientRect(m_Window, &clientRect))
     {
@@ -156,6 +164,9 @@ void DXWindow::Resize()
         m_SwapChain->ResizeBuffers(m_BufferCount, m_Width, m_Height, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
         m_Resize = false;
     }
+
+    // Now get new buffer references after resize
+    GetBuffers();
 }
 
 void DXWindow::SetFullScreen(bool enable)
@@ -226,4 +237,25 @@ LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LP
     }
 
     return DefWindowProcW(wnd, msg, wParam, lParam);
+}
+
+bool DXWindow::GetBuffers()
+{
+    for (UINT i = 0; i < m_BufferCount; i++)
+    {
+        if (FAILED(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_Buffers[i]))))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void DXWindow::ReleaseBuffers()
+{
+    for (UINT i = 0; i < m_BufferCount; i++)
+    {
+        m_Buffers[i].Release();
+    }
 }
