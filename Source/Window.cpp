@@ -158,12 +158,62 @@ void DXWindow::Resize()
     }
 }
 
+void DXWindow::SetFullScreen(bool enable)
+{
+    // Update window styling
+    DWORD style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+    DWORD exStyle = WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW;
+
+    if (enable)
+    {
+        style = WS_POPUP | WS_VISIBLE;
+        exStyle = WS_EX_APPWINDOW;
+    }
+
+    // Set internal style of window
+    SetWindowLongW(m_Window, GWL_STYLE, style);
+    SetWindowLongW(m_Window, GWL_EXSTYLE, exStyle);
+
+    // Adjust window size
+    if (enable)
+    {
+        HMONITOR monitorHandle = MonitorFromWindow(m_Window, MONITOR_DEFAULTTONEAREST); // Get the monitor the window is currently living on
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        
+        if (GetMonitorInfoW(monitorHandle, &monitorInfo))
+        {
+            // Change window position and size to the size of the monitor
+            SetWindowPos(m_Window,
+                nullptr,
+                monitorInfo.rcMonitor.left,
+                monitorInfo.rcMonitor.top,
+                monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                SWP_NOZORDER
+                );
+        }
+    }
+    else // Maximize when deactiving fullscreen
+    {
+        ShowWindow(m_Window, SW_MAXIMIZE);
+    }
+
+    m_isFullscreen = enable;
+}
+
 LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Handle windows messages
     switch (msg)
     {
-    case WM_SIZE:
+    case WM_KEYDOWN: // When a key is pressed
+        if (wParam == VK_F11) // F11 key for full screen
+        {
+            GetDXWindow().SetFullScreen(!GetDXWindow().IsFullScreen());
+        }
+        break;
+    case WM_SIZE: // Window resize
         // Checks to make sure resize isn't triggering for minimizing and maximizing the window
         if (lParam && HIWORD(lParam) != GetDXWindow().m_Height && LOWORD(lParam) != GetDXWindow().m_Width)
         {

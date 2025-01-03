@@ -25,6 +25,7 @@ public:
 	void Update();
 	void Present();
 	void Resize();
+	void SetFullScreen(bool enable);
 
 	inline bool GameExit() const
 	{
@@ -41,6 +42,11 @@ public:
 		return m_Resize;
 	}
 
+	inline bool IsFullScreen() const
+	{
+		return m_isFullscreen;
+	}
+
 private:
 	static LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
 
@@ -54,6 +60,7 @@ private:
 	UINT m_Width = 1920;
 	UINT m_Height = 1080;
 	bool m_Resize = false;
+	bool m_isFullscreen = false;
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
 };
