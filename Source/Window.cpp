@@ -213,6 +213,35 @@ void DXWindow::SetFullScreen(bool enable)
     m_isFullscreen = enable;
 }
 
+void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
+{
+    // Update the current buffer index to start drawing the frame to the correct buffer
+    m_CurrentBufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
+
+    D3D12_RESOURCE_BARRIER barrier;
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = m_Buffers[m_CurrentBufferIndex];
+    barrier.Transition.Subresource = 0;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    cmdList->ResourceBarrier(1, &barrier);
+}
+
+void DXWindow::EndFrame(ID3D12GraphicsCommandList6* cmdList)
+{
+    D3D12_RESOURCE_BARRIER barrier;
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = m_Buffers[m_CurrentBufferIndex];
+    barrier.Transition.Subresource = 0;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+
+    cmdList->ResourceBarrier(1, &barrier);
+}
+
 LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Handle windows messages

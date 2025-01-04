@@ -27,6 +27,9 @@ public:
 	void Resize();
 	void SetFullScreen(bool enable);
 
+	void BeginFrame(ID3D12GraphicsCommandList6* cmdList);
+	void EndFrame(ID3D12GraphicsCommandList6* cmdList);
+
 	inline bool GameExit() const
 	{
 		return m_GameExit;
@@ -67,4 +70,6 @@ private:
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
 	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
+
+	UINT m_CurrentBufferIndex = 0;
 };

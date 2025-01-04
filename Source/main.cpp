@@ -28,10 +28,14 @@ int main()
                 DXWindow::GetDXWindow().Resize();
             }
 
-            // Draw
+            // Prepare the command list for drawing
             auto* cmdList = DXContext::GetDXContext().InitCommandList();
 
-            //
+            // Begin drawing frame
+            DXWindow::GetDXWindow().BeginFrame(cmdList);
+
+            // End drawing frame
+            DXWindow::GetDXWindow().EndFrame(cmdList);
 
             // Finish drawing and present
             DXContext::GetDXContext().ExecuteCommandList();
