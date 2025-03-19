@@ -229,63 +229,6 @@ void DXContext::PrintDeviceSupportLevel()
 	{
 		printf("ID3D12 Device 10 is NOT supported.\n");
 	}
-
-	//HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-	//if (FAILED(hr)) {
-	//    std::cerr << "Failed to initialize COM library. Error: " << hr << std::endl;
-	//    return -1;
-	//}
-
-	//Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
-	//hr = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
-	//if (FAILED(hr)) {
-	//    std::cerr << "Failed to create DXGI Factory. Error: " << hr << std::endl;
-	//    return -1;
-	//}
-
-	//// Get the first hardware adapter
-	//Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-	//for (UINT i = 0; DXGI_ERROR_NOT_FOUND != factory->EnumAdapters1(i, &adapter); ++i) {
-	//    DXGI_ADAPTER_DESC1 desc;
-	//    adapter->GetDesc1(&desc);
-
-	//    // Skip software adapters
-	//    if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
-	//        continue;
-	//    }
-
-	//    // Print adapter info
-	//    std::wcout << L"Using Adapter: " << desc.Description << std::endl;
-	//    break;
-	//}
-
-	//if (!adapter) {
-	//    std::cerr << "No suitable adapter found." << std::endl;
-	//    return -1;
-	//}
-
-	//// Create a D3D12 device
-	//Microsoft::WRL::ComPtr<ID3D12Device> device;
-	//hr = D3D12CreateDevice(
-	//    adapter.Get(),
-	//    D3D_FEATURE_LEVEL_11_0,
-	//    IID_PPV_ARGS(&device)
-	//);
-
-	//if (FAILED(hr)) {
-	//    std::cerr << "Failed to create D3D12 device. Error: " << hr << std::endl;
-	//    return -1;
-	//}
-
-	//Microsoft::WRL::ComPtr<ID3D12Device10> dev10;
-	//if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&dev10))))
-	//{
-	//    printf("ID3D12 Device 10 is supported.\n");
-	//}
-	//else
-	//{
-	//    printf("ID3D12 Device 10 is NOT supported.\n");
-	//}
 }
 
 void DXContext::PrintCommandListSupportLevel()

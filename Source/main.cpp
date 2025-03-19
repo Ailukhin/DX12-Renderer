@@ -12,7 +12,7 @@ int main()
     if (DXContext::GetDXContext().Init() && DXWindow::GetDXWindow().Init())
     {
         // Set fullscreen
-        DXWindow::GetDXWindow().SetFullScreen(true);
+        //DXWindow::GetDXWindow().SetFullScreen(true);
 
         while (!DXWindow::GetDXWindow().GameExit())
         {

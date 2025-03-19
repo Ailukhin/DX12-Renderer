@@ -48,8 +48,8 @@ bool DXWindow::Init()
                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, // something else to do with window style
                               0, // x position of monitor, starts from top left
                               0, // y position of monitor, starts from top left
-                              1920, // Width
-                              1080, // Height
+                              2560, // Width
+                              1440, // Height
                               nullptr, // Window parent
                               nullptr, // Window menu
                               wnd.hInstance, // Window instance
@@ -64,8 +64,8 @@ bool DXWindow::Init()
 
     // Swap chain descriptor
     DXGI_SWAP_CHAIN_DESC1 swap_desc{};
-    swap_desc.Width = 1920;
-    swap_desc.Height = 1080;
+    swap_desc.Width = 2560;
+    swap_desc.Height = 1440;
     swap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // Normal format for 8 bits in each color channel
     swap_desc.Stereo = false;
     swap_desc.SampleDesc.Count = 1; // 1 pixel per pixel
@@ -98,6 +98,28 @@ bool DXWindow::Init()
         return false;
     }
 
+    // Create Render Target View Heap
+    D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc{};
+    descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    descHeapDesc.NumDescriptors = m_BufferCount;
+    descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    descHeapDesc.NodeMask = 0;
+
+    if (FAILED(DXContext::GetDXContext().GetDevice()->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
+    {
+        return false;
+    }
+
+    // Create handles to view
+    auto firstHandle = m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+    auto handleIncrement = DXContext::GetDXContext().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    for (size_t i = 0; i < m_BufferCount; i++)
+    {
+        m_rtvHandles[i] = firstHandle;
+        m_rtvHandles[i].ptr += handleIncrement * i;
+    }
+
     if (!GetBuffers())
     {
         return false;
@@ -109,6 +131,8 @@ bool DXWindow::Init()
 void DXWindow::Shutdown()
 {
     ReleaseBuffers();
+
+    m_rtvDescHeap.Release();
 
     m_SwapChain.Release();
 
@@ -201,8 +225,7 @@ void DXWindow::SetFullScreen(bool enable)
                 monitorInfo.rcMonitor.top,
                 monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
                 monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-                SWP_NOZORDER
-                );
+                SWP_NOZORDER);
         }
     }
     else // Maximize when deactiving fullscreen
@@ -227,6 +250,11 @@ void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
     cmdList->ResourceBarrier(1, &barrier);
+
+    float clearColor[] = { 0.6f, 0.8f, 0.9f, 1.0f };
+    cmdList->ClearRenderTargetView(m_rtvHandles[m_CurrentBufferIndex], clearColor, 0, nullptr);
+
+    cmdList->OMSetRenderTargets(1, &m_rtvHandles[m_CurrentBufferIndex], false, nullptr);
 }
 
 void DXWindow::EndFrame(ID3D12GraphicsCommandList6* cmdList)
@@ -276,6 +304,14 @@ bool DXWindow::GetBuffers()
         {
             return false;
         }
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
+        rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        rtvDesc.Texture2D.MipSlice = 0;
+        rtvDesc.Texture2D.PlaneSlice = 0;
+
+        DXContext::GetDXContext().GetDevice()->CreateRenderTargetView(m_Buffers[i], &rtvDesc, m_rtvHandles[i]);
     }
 
     return true;
