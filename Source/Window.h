@@ -63,8 +63,8 @@ private:
 
 	static constexpr UINT m_BufferCount = 2;
 
-	UINT m_Width = 1920;
-	UINT m_Height = 1080;
+	UINT m_Width = 2560;
+	UINT m_Height = 1440;
 	bool m_Resize = false;
 	bool m_isFullscreen = false;
 
@@ -72,4 +72,9 @@ private:
 	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
 
 	UINT m_CurrentBufferIndex = 0;
+
+	// Render target view descriptor heap
+	ComPointer<ID3D12DescriptorHeap> m_rtvDescHeap;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE m_rtvHandles[m_BufferCount];
 };
