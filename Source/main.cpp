@@ -4,6 +4,7 @@
 #include "DXDebugLayer.h"
 #include "DXContext.h"
 #include "Window.h"
+#include "ShaderObject.h"
 
 int main()
 {
@@ -79,11 +80,19 @@ int main()
         cmdList->CopyBufferRegion(vertBuffer, 0, upBuffer, 0, 1024);
         DXContext::GetDXContext().ExecuteCommandList();
 
+        // Shaders
+        ShaderObject vertexShader("VertexShader.cso");
+        ShaderObject pixelShader("PixelShader.cso");
+
         // Pipeline state
         D3D12_GRAPHICS_PIPELINE_STATE_DESC gfxPsoDesc;
         gfxPsoDesc.InputLayout.NumElements = _countof(vertexLayout);
         gfxPsoDesc.InputLayout.pInputElementDescs = vertexLayout;
         gfxPsoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+        gfxPsoDesc.VS.pShaderBytecode = vertexShader.GetBuffer();
+        gfxPsoDesc.VS.BytecodeLength = vertexShader.GetSize();
+        gfxPsoDesc.PS.pShaderBytecode = vertexShader.GetBuffer();
+        gfxPsoDesc.PS.BytecodeLength = vertexShader.GetSize();
 
         // Vertex buffer view
         D3D12_VERTEX_BUFFER_VIEW vbv{};
