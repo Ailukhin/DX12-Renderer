@@ -97,14 +97,15 @@ int main()
         gfxPsoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
         gfxPsoDesc.VS.pShaderBytecode = vertexShader.GetBuffer();
         gfxPsoDesc.VS.BytecodeLength = vertexShader.GetSize();
-        gfxPsoDesc.PS.pShaderBytecode = vertexShader.GetBuffer();
-        gfxPsoDesc.PS.BytecodeLength = vertexShader.GetSize();
+        gfxPsoDesc.PS.pShaderBytecode = pixelShader.GetBuffer();
+        gfxPsoDesc.PS.BytecodeLength = pixelShader.GetSize();
         gfxPsoDesc.GS.BytecodeLength = 0; // Geo shader
         gfxPsoDesc.GS.pShaderBytecode = nullptr;
         gfxPsoDesc.DS.BytecodeLength = 0; // Domain shader
         gfxPsoDesc.DS.pShaderBytecode = nullptr;
         gfxPsoDesc.HS.BytecodeLength = 0; // Hull shader
         gfxPsoDesc.HS.pShaderBytecode = nullptr;
+        gfxPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         gfxPsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         gfxPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         gfxPsoDesc.RasterizerState.FrontCounterClockwise = false;
@@ -115,15 +116,58 @@ int main()
         gfxPsoDesc.RasterizerState.MultisampleEnable = false;
         gfxPsoDesc.RasterizerState.AntialiasedLineEnable = false;
         gfxPsoDesc.RasterizerState.ForcedSampleCount = 0;
+        gfxPsoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
         gfxPsoDesc.StreamOutput.NumEntries = 0;
         gfxPsoDesc.StreamOutput.NumStrides = 0;
         gfxPsoDesc.StreamOutput.pBufferStrides = nullptr;
         gfxPsoDesc.StreamOutput.pSODeclaration = nullptr;
         gfxPsoDesc.StreamOutput.RasterizedStream = 0;
+        gfxPsoDesc.NumRenderTargets = 1;
+        gfxPsoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        gfxPsoDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[2] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[3] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[4] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[5] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[6] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.RTVFormats[7] = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+        gfxPsoDesc.BlendState.AlphaToCoverageEnable = false;
+        gfxPsoDesc.BlendState.IndependentBlendEnable = false;
+        gfxPsoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+        gfxPsoDesc.BlendState.RenderTarget[0].LogicOpEnable = false;
+        gfxPsoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
+        gfxPsoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+        gfxPsoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+        gfxPsoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+        gfxPsoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+        gfxPsoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        gfxPsoDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+        gfxPsoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        gfxPsoDesc.DepthStencilState.DepthEnable = false;
+        gfxPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        gfxPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        gfxPsoDesc.DepthStencilState.StencilEnable = false;
+        gfxPsoDesc.DepthStencilState.StencilReadMask = 0;
+        gfxPsoDesc.DepthStencilState.StencilWriteMask = 0;
+        gfxPsoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        gfxPsoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.DepthStencilState.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        gfxPsoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        gfxPsoDesc.SampleMask = 0xFFFFFFFF;
+        gfxPsoDesc.SampleDesc.Count = 1;
+        gfxPsoDesc.SampleDesc.Quality = 0;
         gfxPsoDesc.NodeMask = 0;
         gfxPsoDesc.CachedPSO.CachedBlobSizeInBytes = 0;
         gfxPsoDesc.CachedPSO.pCachedBlob = nullptr;
         gfxPsoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+        ComPointer<ID3D12PipelineState> pso;
+        DXContext::GetDXContext().GetDevice()->CreateGraphicsPipelineState(&gfxPsoDesc, IID_PPV_ARGS(&pso));
 
         // Vertex buffer view
         D3D12_VERTEX_BUFFER_VIEW vbv{};
@@ -150,6 +194,10 @@ int main()
 
             // Begin drawing frame
             DXWindow::GetDXWindow().BeginFrame(cmdList);
+
+            // Pipeline state
+            cmdList->SetPipelineState(pso);
+            cmdList->SetGraphicsRootSignature(rootSignature);
 
             // Input assembly
             cmdList->IASetVertexBuffers(0, 1, &vbv);
