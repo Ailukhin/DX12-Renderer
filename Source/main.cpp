@@ -6,6 +6,23 @@
 #include "Window.h"
 #include "ShaderObject.h"
 
+void MixColor(float* color)
+{
+    static int colorState = 0;
+    color[colorState] += 0.01f;
+    if (color[colorState] > 1.0f)
+    {
+        colorState++;
+        if (colorState == 3)
+        {
+            color[0] = 0.0f;
+            color[1] = 0.0f;
+            color[2] = 0.0f;
+            colorState = 0;
+        }
+    }
+}
+
 int main()
 {
     DXDebugLayer::GetDXDebug().Init();
@@ -134,9 +151,9 @@ int main()
         gfxPsoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
         gfxPsoDesc.BlendState.AlphaToCoverageEnable = false;
         gfxPsoDesc.BlendState.IndependentBlendEnable = false;
-        gfxPsoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+        gfxPsoDesc.BlendState.RenderTarget[0].BlendEnable = true;
         gfxPsoDesc.BlendState.RenderTarget[0].LogicOpEnable = false;
-        gfxPsoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
+        gfxPsoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
         gfxPsoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
         gfxPsoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
         gfxPsoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
@@ -202,6 +219,28 @@ int main()
             // Input assembly
             cmdList->IASetVertexBuffers(0, 1, &vbv);
             cmdList->IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            // Raster
+            D3D12_VIEWPORT vp;
+            vp.TopLeftX = 0;
+            vp.TopLeftY = 0;
+            vp.Width = DXWindow::GetDXWindow().GetWindowWidth();
+            vp.Height = DXWindow::GetDXWindow().GetWindowHeight();
+            vp.MinDepth = 1.0f;
+            vp.MaxDepth = 0.0f;
+            cmdList->RSSetViewports(1, &vp);
+
+            RECT scRect;
+            scRect.left = 0;
+            scRect.top = 0;
+            scRect.right = DXWindow::GetDXWindow().GetWindowWidth();
+            scRect.bottom = DXWindow::GetDXWindow().GetWindowHeight();
+            cmdList->RSSetScissorRects(1, &scRect);
+
+            // Root arguments
+            static float color[] = { 0.0f, 0.0f, 0.0f };
+            MixColor(color);
+            cmdList->SetGraphicsRoot32BitConstants(0, 3, color, 0);
 
             // Draw
             cmdList->DrawInstanced(_countof(verts), 1, 0, 0);

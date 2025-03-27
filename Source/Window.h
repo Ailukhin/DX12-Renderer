@@ -50,6 +50,16 @@ public:
 		return m_isFullscreen;
 	}
 
+	inline UINT GetWindowWidth() const
+	{
+		return m_Width;
+	}
+
+	inline UINT GetWindowHeight() const
+	{
+		return m_Height;
+	}
+
 private:
 	static LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
 
