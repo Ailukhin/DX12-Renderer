@@ -44,7 +44,7 @@ bool DXWindow::Init()
     // WS_EX_OVERLAPPEDWINDOW is default window
     m_Window = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW, // window style
                               (LPCWSTR)m_WndClass, // Window class name that was just registered
-                              L"DX12 Renderer", // Name of window
+                              m_WindowCaption.c_str(), // Name of window
                               WS_OVERLAPPEDWINDOW | WS_VISIBLE, // something else to do with window style
                               0, // x position of monitor, starts from top left
                               0, // y position of monitor, starts from top left
@@ -151,18 +151,18 @@ void DXWindow::Shutdown()
 
 void DXWindow::Update()
 {
-    MSG msg;
+    //MSG msg;
 
-    // Poll for a window message in the event queue
-    // pass in message pointer, the window instance, some filter min/max figure out what this is later, 
-    // PM_REMOVE removes the message from the event queue after being processed
-    while (PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
-    {
-        TranslateMessage(&msg);
+    //// Poll for a window message in the event queue
+    //// pass in message pointer, the window instance, some filter min/max figure out what this is later, 
+    //// PM_REMOVE removes the message from the event queue after being processed
+    //while (PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
+    //{
+    //    TranslateMessage(&msg);
 
-        // Call the WNDPROC to update the window
-        DispatchMessageW(&msg);
-    }
+    //    // Call the WNDPROC to update the window
+    //    DispatchMessageW(&msg);
+    //}
 }
 
 void DXWindow::Present()
@@ -236,6 +236,37 @@ void DXWindow::SetFullScreen(bool enable)
     m_isFullscreen = enable;
 }
 
+void DXWindow::CalculateFrameStats()
+{
+    // Code computes the average frames per second, and also the 
+    // average time it takes to render one frame.  These stats 
+    // are appended to the window caption bar.
+    static int frameCnt = 0;
+    static float timeElapsed = 0.0f;
+
+    frameCnt++;
+
+    // Compute averages over one second period.
+    if ((mTimer.TotalTime() - timeElapsed) >= 1.0f)
+    {
+        float fps = (float)frameCnt; // fps = frameCnt / 1
+        float mspf = 1000.0f / fps;
+
+        wstring fpsStr = to_wstring(fps);
+        wstring mspfStr = to_wstring(mspf);
+
+        wstring windowText = m_WindowCaption +
+            L"    fps: " + fpsStr +
+            L"   mspf: " + mspfStr;
+
+        SetWindowText(m_Window, windowText.c_str());
+
+        // Reset for next average.
+        frameCnt = 0;
+        timeElapsed += 1.0f;
+    }
+}
+
 void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
 {
     // Update the current buffer index to start drawing the frame to the correct buffer
@@ -248,6 +279,7 @@ void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
     barrier.Transition.Subresource = 0;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
 
     cmdList->ResourceBarrier(1, &barrier);
 

@@ -1,6 +1,9 @@
 #include "WinInclude.h"
 #include "ComPointer.h"
 #include <cassert>
+#include "GameTimer.h"
+#include <string>
+using namespace std;
 
 class DXWindow
 {
@@ -26,6 +29,8 @@ public:
 	void Present();
 	void Resize();
 	void SetFullScreen(bool enable);
+
+	void CalculateFrameStats();
 
 	void BeginFrame(ID3D12GraphicsCommandList6* cmdList);
 	void EndFrame(ID3D12GraphicsCommandList6* cmdList);
@@ -60,15 +65,19 @@ public:
 		return m_Height;
 	}
 
+protected:
+
+
 private:
 	static LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
 
 	bool GetBuffers();
 	void ReleaseBuffers();
 
-private:
+public:
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
+	wstring m_WindowCaption = L"DX12 Renderer";
 	bool m_GameExit = false;
 
 	static constexpr UINT m_BufferCount = 2;
@@ -77,6 +86,9 @@ private:
 	UINT m_Height = 1440;
 	bool m_Resize = false;
 	bool m_isFullscreen = false;
+
+	// Keep track of delta time and game time
+	GameTimer mTimer;
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
 	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
