@@ -75,7 +75,7 @@ private:
 	void ReleaseBuffers();
 
 protected:
-	static DXWindow* mApp;
+	static DXWindow* m_App;
 
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
@@ -87,10 +87,14 @@ protected:
 	UINT m_Width = 2560;
 	UINT m_Height = 1440;
 	bool m_Resize = false;
+	bool m_isResizing = false;
 	bool m_isFullscreen = false;
+	bool m_AppPaused = false;
+	bool m_Minimized = false;
+	bool m_Maximized = false;
 
 	// Keep track of delta time and game time
-	GameTimer mTimer;
+	GameTimer m_Timer;
 
 	ComPointer<IDXGISwapChain3> m_SwapChain;
 	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
@@ -100,5 +104,5 @@ protected:
 	// Render target view descriptor heap
 	ComPointer<ID3D12DescriptorHeap> m_rtvDescHeap;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_rtvHandles[m_BufferCount];
+	D3D12_CPU_DESCRIPTOR_HANDLE m_rtvHandles[m_BufferCount] = { 0 };
 };

@@ -11,8 +11,8 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 DXWindow::DXWindow()
 {
-    assert(mApp == nullptr);
-    mApp = this;
+    assert(m_App == nullptr);
+    m_App = this;
 }
 
 DXWindow::~DXWindow()
@@ -20,17 +20,17 @@ DXWindow::~DXWindow()
 
 }
 
-DXWindow* DXWindow::mApp = nullptr;
+DXWindow* DXWindow::m_App = nullptr;
 DXWindow* DXWindow::GetApp()
 {
-    return mApp;
+    return m_App;
 }
 
 int DXWindow::Run()
 {
     MSG msg = { 0 };
 
-    mTimer.Reset();
+    m_Timer.Reset();
 
     while (!GameExit())
     {
@@ -46,11 +46,11 @@ int DXWindow::Run()
         }
         else
         {
-            mTimer.Tick();
+            m_Timer.Tick();
 
             CalculateFrameStats();
-            Update(mTimer);
-            Draw(mTimer);
+            Update(m_Timer);
+            Draw(m_Timer);
         }
     }
 
@@ -308,7 +308,7 @@ void DXWindow::CalculateFrameStats()
     frameCnt++;
 
     // Compute averages over one second period.
-    if ((mTimer.TotalTime() - timeElapsed) >= 1.0f)
+    if ((m_Timer.TotalTime() - timeElapsed) >= 1.0f)
     {
         float fps = (float)frameCnt; // fps = frameCnt / 1
         float mspf = 1000.0f / fps;
@@ -368,22 +368,114 @@ LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LP
     // Handle windows messages
     switch (msg)
     {
-    case WM_KEYDOWN: // When a key is pressed
-        if (wParam == VK_F11) // F11 key for full screen
+    // WM_ACTIVATE is sent when the window is activated or deactivated.  
+    // We pause the game when the window is deactivated and unpause it 
+    // when it becomes active.  
+    case WM_ACTIVATE:
+        if (LOWORD(wParam) == WA_INACTIVE)
+        {
+            m_AppPaused = true;
+            m_Timer.Stop();
+        }
+        else
+        {
+            m_AppPaused = false;
+            m_Timer.Start();
+        }
+        break;
+
+    case WM_KEYDOWN:
+        if (wParam == VK_F11)
         {
             DXWindow::GetApp()->SetFullScreen(!DXWindow::GetApp()->IsFullScreen());
         }
-        break;
-    case WM_SIZE: // Window resize
-        // Checks to make sure resize isn't triggering for minimizing and maximizing the window
-        if (lParam && HIWORD(lParam) != m_Height && LOWORD(lParam) != m_Width)
+        else if (wParam == VK_ESCAPE)
         {
-            m_Resize = true;
+            m_GameExit = true;
         }
         break;
+
+    case WM_SIZE:
+        // Save the new client area dimensions.
+        m_Width = LOWORD(lParam);
+        m_Height = HIWORD(lParam);
+        if (DXContext::GetDXContext().GetDevice())
+        {
+            if (wParam == SIZE_MINIMIZED)
+            {
+                m_AppPaused = true;
+                m_Minimized = true;
+                m_Maximized = false;
+            }
+            else if (wParam == SIZE_MAXIMIZED)
+            {
+                m_AppPaused = false;
+                m_Minimized = false;
+                m_Maximized = true;
+                m_Resize = true;
+            }
+            else if (wParam == SIZE_RESTORED)
+            {
+
+                // Restoring from minimized state?
+                if (m_Minimized)
+                {
+                    m_AppPaused = false;
+                    m_Minimized = false;
+                    m_Resize = true;
+                }
+
+                // Restoring from maximized state?
+                else if (m_Maximized)
+                {
+                    m_AppPaused = false;
+                    m_Maximized = false;
+                    m_Resize = true;
+                }
+                else if (m_isResizing)
+                {
+                    // If user is dragging the resize bars, we do not resize 
+                    // the buffers here because as the user continuously 
+                    // drags the resize bars, a stream of WM_SIZE messages are
+                    // sent to the window, and it would be pointless (and slow)
+                    // to resize for each WM_SIZE message received from dragging
+                    // the resize bars.  So instead, we reset after the user is 
+                    // done resizing the window and releases the resize bars, which 
+                    // sends a WM_EXITSIZEMOVE message.
+                }
+                else // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
+                {
+                    m_Resize = true;
+                }
+            }
+        }
+        break;
+
+    // WM_EXITSIZEMOVE is sent when the user grabs the resize bars.
+    case WM_ENTERSIZEMOVE:
+        m_AppPaused = true;
+        m_isResizing = true;
+        m_Timer.Stop();
+        break;
+
+    // WM_EXITSIZEMOVE is sent when the user releases the resize bars.
+    // Here we reset everything based on the new window dimensions.
+    case WM_EXITSIZEMOVE:
+        m_AppPaused = false;
+        m_isResizing = false;
+        m_Timer.Start();
+        m_Resize = true;
+        break;
+
+    // Catch this message so to prevent the window from becoming too small.
+    case WM_GETMINMAXINFO:
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+        break;
+
     case WM_CLOSE: // Handle manual window close
         m_GameExit = true;
-        return 0;
+        break;
     }
 
     return DefWindowProcW(wnd, msg, wParam, lParam);
