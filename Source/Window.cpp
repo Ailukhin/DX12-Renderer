@@ -1,12 +1,89 @@
 #include "Window.h"
 #include "DXContext.h"
+#include <DXDebugLayer.h>
+
+LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    // Forward hwnd on because we can get messages (e.g., WM_CREATE)
+    // before CreateWindow returns, and thus before mhMainWnd is valid.
+    return DXWindow::GetApp()->OnWindowMessage(hwnd, msg, wParam, lParam);
+}
+
+DXWindow::DXWindow()
+{
+    assert(mApp == nullptr);
+    mApp = this;
+}
+
+DXWindow::~DXWindow()
+{
+
+}
+
+DXWindow* DXWindow::mApp = nullptr;
+DXWindow* DXWindow::GetApp()
+{
+    return mApp;
+}
+
+int DXWindow::Run()
+{
+    MSG msg = { 0 };
+
+    mTimer.Reset();
+
+    while (!GameExit())
+    {
+        // Poll for a window message in the event queue
+        // pass in message pointer, the window instance, some filter min/max figure out what this is later, 
+        // PM_REMOVE removes the message from the event queue after being processed
+        if (PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+
+            // Call the WNDPROC to update the window
+            DispatchMessageW(&msg);
+        }
+        else
+        {
+            mTimer.Tick();
+
+            CalculateFrameStats();
+            Update(mTimer);
+            Draw(mTimer);
+        }
+    }
+
+    // Cleanup
+
+    // Flush command queue
+    DXContext::GetDXContext().FlushCommandQueue(GetBufferCount());
+
+    Shutdown();
+
+    DXContext::GetDXContext().Shutdown();
+
+    DXDebugLayer::GetDXDebug().Shutdown();
+
+    return (int)msg.wParam;
+}
 
 bool DXWindow::Init()
 {
+    if (!DXDebugLayer::GetDXDebug().Init())
+    {
+        return false;
+    }
+
+    if (!DXContext::GetDXContext().Init())
+    {
+        return false;
+    }
+
     WNDCLASSEXW wnd{};
     wnd.cbSize = sizeof(wnd);
     wnd.style = CS_OWNDC;
-    wnd.lpfnWndProc = &DXWindow::OnWindowMessage; // Callback function for WNDPROC
+    wnd.lpfnWndProc = MainWndProc; // Callback function for WNDPROC
     wnd.cbClsExtra = 0; // Something about additional memory
     wnd.cbWndExtra = 0; // Something about additional memory
     wnd.hInstance = GetModuleHandle(nullptr); // Executable handle
@@ -147,22 +224,6 @@ void DXWindow::Shutdown()
     {
         UnregisterClassW((LPCWSTR)m_WndClass, GetModuleHandle(nullptr));
     }
-}
-
-void DXWindow::Update()
-{
-    //MSG msg;
-
-    //// Poll for a window message in the event queue
-    //// pass in message pointer, the window instance, some filter min/max figure out what this is later, 
-    //// PM_REMOVE removes the message from the event queue after being processed
-    //while (PeekMessageW(&msg, m_Window, 0, 0, PM_REMOVE))
-    //{
-    //    TranslateMessage(&msg);
-
-    //    // Call the WNDPROC to update the window
-    //    DispatchMessageW(&msg);
-    //}
 }
 
 void DXWindow::Present()
@@ -310,18 +371,18 @@ LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LP
     case WM_KEYDOWN: // When a key is pressed
         if (wParam == VK_F11) // F11 key for full screen
         {
-            GetDXWindow().SetFullScreen(!GetDXWindow().IsFullScreen());
+            DXWindow::GetApp()->SetFullScreen(!DXWindow::GetApp()->IsFullScreen());
         }
         break;
     case WM_SIZE: // Window resize
         // Checks to make sure resize isn't triggering for minimizing and maximizing the window
-        if (lParam && HIWORD(lParam) != GetDXWindow().m_Height && LOWORD(lParam) != GetDXWindow().m_Width)
+        if (lParam && HIWORD(lParam) != m_Height && LOWORD(lParam) != m_Width)
         {
-            GetDXWindow().m_Resize = true;
+            m_Resize = true;
         }
         break;
     case WM_CLOSE: // Handle manual window close
-        GetDXWindow().m_GameExit = true;
+        m_GameExit = true;
         return 0;
     }
 

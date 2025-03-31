@@ -19,6 +19,7 @@ void MixColor(float* color)
 }
 
 GameApp::GameApp()
+    :cmdList(nullptr)
 {
     
 }
@@ -28,11 +29,13 @@ GameApp::~GameApp()
     
 }
 
-void GameApp::Initialize()
-{
-    DXDebugLayer::GetDXDebug().Init();
-    DXContext::GetDXContext().Init();
-    DXWindow::GetDXWindow().Init();
+bool GameApp::Init()
+{  
+    // Call base
+    if (!DXWindow::Init())
+    {
+        return false;
+    }
 
     // Set fullscreen
     //DXWindow::GetDXWindow().SetFullScreen(true);
@@ -178,58 +181,8 @@ void GameApp::Initialize()
     vbv.BufferLocation = vertBuffer->GetGPUVirtualAddress();
     vbv.SizeInBytes = sizeof(Vertex) * _countof(verts); // or just sizeof(verts)
     vbv.StrideInBytes = sizeof(Vertex);
-}
 
-int GameApp::Run()
-{
-    MSG msg = { 0 };
-
-    DXWindow::GetDXWindow().mTimer.Reset();
-
-    while (!DXWindow::GetDXWindow().GameExit())
-    {
-        // Poll for a window message in the event queue
-        // pass in message pointer, the window instance, some filter min/max figure out what this is later, 
-        // PM_REMOVE removes the message from the event queue after being processed
-        if (PeekMessageW(&msg, DXWindow::GetDXWindow().m_Window, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-
-            // Call the WNDPROC to update the window
-            DispatchMessageW(&msg);
-        }
-        else
-        {
-            DXWindow::GetDXWindow().mTimer.Tick();
-
-            DXWindow::GetDXWindow().CalculateFrameStats();
-            Update(DXWindow::GetDXWindow().mTimer);
-            Draw(DXWindow::GetDXWindow().mTimer);
-        }
-    }
-
-    // Cleanup
-
-    // Flush command queue
-    DXContext::GetDXContext().FlushCommandQueue(DXWindow::GetDXWindow().GetBufferCount());
-
-    vertBuffer.Release();
-    upBuffer.Release();
-    rootSignature.Release();
-    pso.Release();
-    cmdList = nullptr;
-
-    DXWindow::GetDXWindow().Shutdown();
-    DXContext::GetDXContext().Shutdown();
-
-    DXDebugLayer::GetDXDebug().Shutdown();
-
-    return (int)msg.wParam;
-}
-
-void GameApp::Resize()
-{
-
+    return true;
 }
 
 void GameApp::Update(const GameTimer& timer)
@@ -240,19 +193,19 @@ void GameApp::Update(const GameTimer& timer)
 void GameApp::Draw(const GameTimer& timer)
 {
     // Check for resize after window update
-    if (DXWindow::GetDXWindow().ShouldResize())
+    if (ShouldResize())
     {
         // Command queue must be flushed before resize
-        DXContext::GetDXContext().FlushCommandQueue(DXWindow::GetDXWindow().GetBufferCount());
+        DXContext::GetDXContext().FlushCommandQueue(GetBufferCount());
 
-        DXWindow::GetDXWindow().Resize();
+        Resize();
     }
 
     // Prepare the command list for drawing
     cmdList = DXContext::GetDXContext().InitCommandList();
 
     // Begin drawing frame
-    DXWindow::GetDXWindow().BeginFrame(cmdList);
+    BeginFrame(cmdList);
 
     // Pipeline state
     cmdList->SetPipelineState(pso);
@@ -266,8 +219,8 @@ void GameApp::Draw(const GameTimer& timer)
     D3D12_VIEWPORT vp;
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
-    vp.Width = DXWindow::GetDXWindow().GetWindowWidth();
-    vp.Height = DXWindow::GetDXWindow().GetWindowHeight();
+    vp.Width = GetWindowWidth();
+    vp.Height = GetWindowHeight();
     vp.MinDepth = 1.0f;
     vp.MaxDepth = 0.0f;
     cmdList->RSSetViewports(1, &vp);
@@ -275,8 +228,8 @@ void GameApp::Draw(const GameTimer& timer)
     RECT scRect;
     scRect.left = 0;
     scRect.top = 0;
-    scRect.right = DXWindow::GetDXWindow().GetWindowWidth();
-    scRect.bottom = DXWindow::GetDXWindow().GetWindowHeight();
+    scRect.right = GetWindowWidth();
+    scRect.bottom = GetWindowHeight();
     cmdList->RSSetScissorRects(1, &scRect);
 
     // Root arguments
@@ -288,10 +241,22 @@ void GameApp::Draw(const GameTimer& timer)
     cmdList->DrawInstanced(_countof(verts), 1, 0, 0);
 
     // End drawing frame
-    DXWindow::GetDXWindow().EndFrame(cmdList);
+    EndFrame(cmdList);
 
     // Finish drawing and present
     DXContext::GetDXContext().ExecuteCommandList();
 
-    DXWindow::GetDXWindow().Present();
+    Present();
+}
+
+void GameApp::Shutdown()
+{
+    vertBuffer.Release();
+    upBuffer.Release();
+    rootSignature.Release();
+    pso.Release();
+    cmdList = nullptr;
+
+    // Call base
+    DXWindow::Shutdown();
 }

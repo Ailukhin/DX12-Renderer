@@ -5,7 +5,7 @@ int main()
 {
     GameApp app;
 
-    app.Initialize();
+    app.Init();
     
     return app.Run();
 }

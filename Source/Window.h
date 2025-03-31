@@ -8,32 +8,21 @@ using namespace std;
 class DXWindow
 {
 	// Singleton
-public:
+protected:
+	DXWindow();
 	DXWindow(const DXWindow&) = delete;
 	DXWindow& operator= (const DXWindow&) = delete;
-
-	inline static DXWindow& GetDXWindow()
-	{
-		static DXWindow instance;
-		return instance;
-	}
-
-private:
-	DXWindow() = default;
+	virtual ~DXWindow();
 
 	// 
 public:
-	bool Init();
-	void Shutdown();
-	void Update();
-	void Present();
-	void Resize();
-	void SetFullScreen(bool enable);
+	static DXWindow* GetApp();
 
-	void CalculateFrameStats();
+	int Run();
 
-	void BeginFrame(ID3D12GraphicsCommandList6* cmdList);
-	void EndFrame(ID3D12GraphicsCommandList6* cmdList);
+	virtual bool Init();
+
+	LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
 
 	inline bool GameExit() const
 	{
@@ -66,15 +55,28 @@ public:
 	}
 
 protected:
+	virtual void Update(const GameTimer& timer) = 0;
+	virtual void Draw(const GameTimer& timer) = 0;
+	void Resize();
 
+	virtual void Shutdown();
+
+	void SetFullScreen(bool enable);
+
+	void Present();
+
+	void CalculateFrameStats();
+
+	void BeginFrame(ID3D12GraphicsCommandList6* cmdList);
+	void EndFrame(ID3D12GraphicsCommandList6* cmdList);
 
 private:
-	static LRESULT CALLBACK OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM aParam);
-
 	bool GetBuffers();
 	void ReleaseBuffers();
 
-public:
+protected:
+	static DXWindow* mApp;
+
 	ATOM m_WndClass = 0;
 	HWND m_Window = nullptr;
 	wstring m_WindowCaption = L"DX12 Renderer";
