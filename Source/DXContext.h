@@ -27,6 +27,13 @@ public:
 	ID3D12GraphicsCommandList6* InitCommandList();
 	void ExecuteCommandList();
 
+	void PrintDeviceSupportLevel();
+	void PrintCommandListSupportLevel();
+
+	void LogAdapters(); // Prints some monitor display information
+	void LogAdapterOutputs(IDXGIAdapter* adapter);
+	void LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format);
+
 	inline void FlushCommandQueue(UINT count)
 	{
 		for (UINT i = 0; i < count; i++)
@@ -34,9 +41,6 @@ public:
 			SignalAndWait();
 		}
 	}
-
-	void PrintDeviceSupportLevel();
-	void PrintCommandListSupportLevel();
 
 	inline ComPointer<ID3D12Device8>& GetDevice()
 	{
