@@ -9,19 +9,18 @@ struct Vertex
     float y;
 };
 
-class GameApp
+class GameApp : public DXWindow
 {
 public :
 	GameApp();
 	~GameApp();
 
-	void Initialize();
-	int Run();
+	bool Init() override;
 
 private:
-	void Resize();
-	void Update(const GameTimer& timer);
-	void Draw(const GameTimer& timer);
+	virtual void Update(const GameTimer& timer) override;
+	virtual void Draw(const GameTimer& timer) override;
+	virtual void Shutdown() override;
 
 private:
 	ComPointer<ID3D12PipelineState> pso;
