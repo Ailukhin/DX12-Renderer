@@ -219,8 +219,8 @@ void GameApp::Draw(const GameTimer& timer)
     D3D12_VIEWPORT vp;
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
-    vp.Width = GetWindowWidth();
-    vp.Height = GetWindowHeight();
+    vp.Width = (FLOAT)GetWindowWidth();
+    vp.Height = (FLOAT)GetWindowHeight();
     vp.MinDepth = 1.0f;
     vp.MaxDepth = 0.0f;
     cmdList->RSSetViewports(1, &vp);

@@ -1,6 +1,8 @@
 #include "Window.h"
 #include "DXContext.h"
+#ifdef _DEBUG
 #include <DXDebugLayer.h>
+#endif
 
 LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -63,17 +65,21 @@ int DXWindow::Run()
 
     DXContext::GetDXContext().Shutdown();
 
+#ifdef _DEBUG
     DXDebugLayer::GetDXDebug().Shutdown();
+#endif
 
     return (int)msg.wParam;
 }
 
 bool DXWindow::Init()
 {
+#ifdef _DEBUG
     if (!DXDebugLayer::GetDXDebug().Init())
     {
         return false;
     }
+#endif
 
     if (!DXContext::GetDXContext().Init())
     {
