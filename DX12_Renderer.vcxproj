@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\ComPointer.h" />
-    <ClInclude Include="Source\DXContext.h" />
     <ClInclude Include="Source\DXDebugLayer.h" />
     <ClInclude Include="Source\GameApp.h" />
     <ClInclude Include="Source\GameTimer.h" />
@@ -29,7 +28,6 @@
     <ClInclude Include="Source\WinInclude.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Source\DXContext.cpp" />
     <ClCompile Include="Source\DXDebugLayer.cpp" />
     <ClCompile Include="Source\GameApp.cpp" />
     <ClCompile Include="Source\GameTimer.cpp" />

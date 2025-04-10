@@ -73,8 +73,8 @@ bool GameApp::Init()
     rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     rd.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    DXContext::GetDXContext().GetDevice()->CreateCommittedResource(&hpUpload, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upBuffer));
-    DXContext::GetDXContext().GetDevice()->CreateCommittedResource(&hpDefault, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&vertBuffer));
+    m_Device->CreateCommittedResource(&hpUpload, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upBuffer));
+    m_Device->CreateCommittedResource(&hpDefault, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&vertBuffer));
 
     // Copy void pointer to CPU Resource
     void* upBufferAddress;
@@ -86,9 +86,9 @@ bool GameApp::Init()
     upBuffer->Unmap(0, &uploadRange);
 
     // Copy CPU Resource to GPU Resource
-    cmdList = DXContext::GetDXContext().InitCommandList();
+    cmdList = InitCommandList();
     cmdList->CopyBufferRegion(vertBuffer, 0, upBuffer, 0, 1024);
-    DXContext::GetDXContext().ExecuteCommandList();
+    ExecuteCommandList();
 
     // Shaders
     ShaderObject rootSignatureShader("RootSignature.cso");
@@ -96,7 +96,7 @@ bool GameApp::Init()
     ShaderObject pixelShader("PixelShader.cso");
 
     // Root signature object
-    DXContext::GetDXContext().GetDevice()->CreateRootSignature(0, rootSignatureShader.GetBuffer(), rootSignatureShader.GetSize(), IID_PPV_ARGS(&rootSignature));
+    m_Device->CreateRootSignature(0, rootSignatureShader.GetBuffer(), rootSignatureShader.GetSize(), IID_PPV_ARGS(&rootSignature));
 
     // Pipeline state
     D3D12_GRAPHICS_PIPELINE_STATE_DESC gfxPsoDesc;
@@ -175,7 +175,7 @@ bool GameApp::Init()
     gfxPsoDesc.CachedPSO.pCachedBlob = nullptr;
     gfxPsoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
-    DXContext::GetDXContext().GetDevice()->CreateGraphicsPipelineState(&gfxPsoDesc, IID_PPV_ARGS(&pso));
+    m_Device->CreateGraphicsPipelineState(&gfxPsoDesc, IID_PPV_ARGS(&pso));
 
     // Vertex buffer view
     vbv.BufferLocation = vertBuffer->GetGPUVirtualAddress();
@@ -196,13 +196,13 @@ void GameApp::Draw(const GameTimer& timer)
     if (ShouldResize())
     {
         // Command queue must be flushed before resize
-        DXContext::GetDXContext().FlushCommandQueue(GetBufferCount());
+        FlushCommandQueue(GetBufferCount());
 
         Resize();
     }
 
     // Prepare the command list for drawing
-    cmdList = DXContext::GetDXContext().InitCommandList();
+    cmdList = InitCommandList();
 
     // Begin drawing frame
     BeginFrame(cmdList);
@@ -244,7 +244,7 @@ void GameApp::Draw(const GameTimer& timer)
     EndFrame(cmdList);
 
     // Finish drawing and present
-    DXContext::GetDXContext().ExecuteCommandList();
+    ExecuteCommandList();
 
     Present();
 }
