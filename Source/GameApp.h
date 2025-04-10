@@ -1,5 +1,4 @@
 #include "Window.h"
-#include "DXContext.h"
 #include "DXDebugLayer.h"
 
 // Vertex data and layout

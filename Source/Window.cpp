@@ -1,5 +1,5 @@
 #include "Window.h"
-#include "DXContext.h"
+
 #ifdef _DEBUG
 #include <DXDebugLayer.h>
 #endif
@@ -50,20 +50,25 @@ int DXWindow::Run()
         {
             m_Timer.Tick();
 
-            CalculateFrameStats();
-            Update(m_Timer);
-            Draw(m_Timer);
+            if (!m_AppPaused)
+            {
+                CalculateFrameStats();
+                Update(m_Timer);
+                Draw(m_Timer);
+            }
+            else
+            {
+                Sleep(100);
+            }
         }
     }
 
     // Cleanup
 
     // Flush command queue
-    DXContext::GetDXContext().FlushCommandQueue(GetBufferCount());
+    FlushCommandQueue(GetBufferCount());
 
     Shutdown();
-
-    DXContext::GetDXContext().Shutdown();
 
 #ifdef _DEBUG
     DXDebugLayer::GetDXDebug().Shutdown();
@@ -81,7 +86,7 @@ bool DXWindow::Init()
     }
 #endif
 
-    if (!DXContext::GetDXContext().Init())
+    if (!InitD3D())
     {
         return false;
     }
@@ -173,8 +178,7 @@ bool DXWindow::Init()
     ComPointer<IDXGISwapChain1> swapChain1;
     
     // Set up swap chain
-    auto& factory = DXContext::GetDXContext().GetDXGIFactory();
-    factory->CreateSwapChainForHwnd(DXContext::GetDXContext().GetCommandQueue(), m_Window, &swap_desc, &swap_fullscreen_desc, nullptr, &swapChain1);
+    m_DxgiFactory->CreateSwapChainForHwnd(m_CmdQueue, m_Window, &swap_desc, &swap_fullscreen_desc, nullptr, &swapChain1);
 
     if (!swapChain1.QueryInterface(m_SwapChain))
     {
@@ -188,14 +192,14 @@ bool DXWindow::Init()
     descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     descHeapDesc.NodeMask = 0;
 
-    if (FAILED(DXContext::GetDXContext().GetDevice()->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
+    if (FAILED(m_Device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
     {
         return false;
     }
 
     // Create handles to view
     auto firstHandle = m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-    auto handleIncrement = DXContext::GetDXContext().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    auto handleIncrement = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
     for (size_t i = 0; i < m_BufferCount; i++)
     {
@@ -213,6 +217,9 @@ bool DXWindow::Init()
 
 void DXWindow::Shutdown()
 {
+    //
+    // Shut down window
+    //
     ReleaseBuffers();
 
     m_rtvDescHeap.Release();
@@ -229,6 +236,157 @@ void DXWindow::Shutdown()
     if (m_WndClass)
     {
         UnregisterClassW((LPCWSTR)m_WndClass, GetModuleHandle(nullptr));
+    }
+
+    //
+    // Now shut down D3D
+    //
+    m_CmdList.Release();
+    m_CmdAllocator.Release();
+
+    if (m_FenceEvent)
+    {
+        CloseHandle(m_FenceEvent);
+    }
+
+    m_Fence.Release();
+    m_CmdQueue.Release();
+    m_Device.Release();
+    m_DxgiFactory.Release();
+}
+
+LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    // Handle windows messages
+    switch (msg)
+    {
+        // WM_ACTIVATE is sent when the window is activated or deactivated.  
+        // We pause the game when the window is deactivated and unpause it 
+        // when it becomes active.  
+    case WM_ACTIVATE:
+        if (LOWORD(wParam) == WA_INACTIVE)
+        {
+            m_AppPaused = true;
+            m_Timer.Stop();
+        }
+        else
+        {
+            m_AppPaused = false;
+            m_Timer.Start();
+        }
+        break;
+
+    case WM_KEYDOWN:
+        if (wParam == VK_F11)
+        {
+            SetFullScreen(!DXWindow::GetApp()->IsFullScreen());
+        }
+        else if (wParam == VK_ESCAPE)
+        {
+            m_GameExit = true;
+        }
+        break;
+
+    case WM_SIZE:
+        // Save the new client area dimensions.
+        m_Width = LOWORD(lParam);
+        m_Height = HIWORD(lParam);
+        if (m_Device)
+        {
+            if (wParam == SIZE_MINIMIZED)
+            {
+                m_AppPaused = true;
+                m_Minimized = true;
+                m_Maximized = false;
+            }
+            else if (wParam == SIZE_MAXIMIZED)
+            {
+                m_AppPaused = false;
+                m_Minimized = false;
+                m_Maximized = true;
+                m_Resize = true;
+            }
+            else if (wParam == SIZE_RESTORED)
+            {
+
+                // Restoring from minimized state?
+                if (m_Minimized)
+                {
+                    m_AppPaused = false;
+                    m_Minimized = false;
+                    m_Resize = true;
+                }
+
+                // Restoring from maximized state?
+                else if (m_Maximized)
+                {
+                    m_AppPaused = false;
+                    m_Maximized = false;
+                    m_Resize = true;
+                }
+                else if (m_isResizing)
+                {
+                    // If user is dragging the resize bars, we do not resize 
+                    // the buffers here because as the user continuously 
+                    // drags the resize bars, a stream of WM_SIZE messages are
+                    // sent to the window, and it would be pointless (and slow)
+                    // to resize for each WM_SIZE message received from dragging
+                    // the resize bars.  So instead, we reset after the user is 
+                    // done resizing the window and releases the resize bars, which 
+                    // sends a WM_EXITSIZEMOVE message.
+                }
+                else // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
+                {
+                    m_Resize = true;
+                }
+            }
+        }
+        break;
+
+        // WM_EXITSIZEMOVE is sent when the user grabs the resize bars.
+    case WM_ENTERSIZEMOVE:
+        m_AppPaused = true;
+        m_isResizing = true;
+        m_Timer.Stop();
+        break;
+
+        // WM_EXITSIZEMOVE is sent when the user releases the resize bars.
+        // Here we reset everything based on the new window dimensions.
+    case WM_EXITSIZEMOVE:
+        m_AppPaused = false;
+        m_isResizing = false;
+        m_Timer.Start();
+        m_Resize = true;
+        break;
+
+        // Catch this message so to prevent the window from becoming too small.
+    case WM_GETMINMAXINFO:
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+        break;
+
+    case WM_CLOSE: // Handle manual window close
+        m_GameExit = true;
+        break;
+    }
+
+    return DefWindowProcW(wnd, msg, wParam, lParam);
+}
+
+bool DXWindow::Get4xMsaaState() const
+{
+    return m4xMsaaState;
+}
+
+void DXWindow::Set4xMsaaState(bool value)
+{
+    if (m4xMsaaState != value)
+    {
+        m4xMsaaState = value;
+
+        // Recreate the swapchain and buffers with new multisample settings.
+        CreateSwapChain();
+        Resize();
     }
 }
 
@@ -258,6 +416,11 @@ void DXWindow::Resize()
 
     // Now get new buffer references after resize
     GetBuffers();
+}
+
+void DXWindow::CreateRtvAndDsvDescriptorHeaps()
+{
+
 }
 
 void DXWindow::SetFullScreen(bool enable)
@@ -369,122 +532,382 @@ void DXWindow::EndFrame(ID3D12GraphicsCommandList6* cmdList)
     cmdList->ResourceBarrier(1, &barrier);
 }
 
-LRESULT CALLBACK DXWindow::OnWindowMessage(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam)
+bool DXWindow::InitWindow()
 {
-    // Handle windows messages
-    switch (msg)
+    return false;
+}
+
+bool DXWindow::InitD3D()
+{
+    // Create dxgi factory
+    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&m_DxgiFactory))))
     {
-    // WM_ACTIVATE is sent when the window is activated or deactivated.  
-    // We pause the game when the window is deactivated and unpause it 
-    // when it becomes active.  
-    case WM_ACTIVATE:
-        if (LOWORD(wParam) == WA_INACTIVE)
-        {
-            m_AppPaused = true;
-            m_Timer.Stop();
-        }
-        else
-        {
-            m_AppPaused = false;
-            m_Timer.Start();
-        }
-        break;
-
-    case WM_KEYDOWN:
-        if (wParam == VK_F11)
-        {
-            DXWindow::GetApp()->SetFullScreen(!DXWindow::GetApp()->IsFullScreen());
-        }
-        else if (wParam == VK_ESCAPE)
-        {
-            m_GameExit = true;
-        }
-        break;
-
-    case WM_SIZE:
-        // Save the new client area dimensions.
-        m_Width = LOWORD(lParam);
-        m_Height = HIWORD(lParam);
-        if (DXContext::GetDXContext().GetDevice())
-        {
-            if (wParam == SIZE_MINIMIZED)
-            {
-                m_AppPaused = true;
-                m_Minimized = true;
-                m_Maximized = false;
-            }
-            else if (wParam == SIZE_MAXIMIZED)
-            {
-                m_AppPaused = false;
-                m_Minimized = false;
-                m_Maximized = true;
-                m_Resize = true;
-            }
-            else if (wParam == SIZE_RESTORED)
-            {
-
-                // Restoring from minimized state?
-                if (m_Minimized)
-                {
-                    m_AppPaused = false;
-                    m_Minimized = false;
-                    m_Resize = true;
-                }
-
-                // Restoring from maximized state?
-                else if (m_Maximized)
-                {
-                    m_AppPaused = false;
-                    m_Maximized = false;
-                    m_Resize = true;
-                }
-                else if (m_isResizing)
-                {
-                    // If user is dragging the resize bars, we do not resize 
-                    // the buffers here because as the user continuously 
-                    // drags the resize bars, a stream of WM_SIZE messages are
-                    // sent to the window, and it would be pointless (and slow)
-                    // to resize for each WM_SIZE message received from dragging
-                    // the resize bars.  So instead, we reset after the user is 
-                    // done resizing the window and releases the resize bars, which 
-                    // sends a WM_EXITSIZEMOVE message.
-                }
-                else // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
-                {
-                    m_Resize = true;
-                }
-            }
-        }
-        break;
-
-    // WM_EXITSIZEMOVE is sent when the user grabs the resize bars.
-    case WM_ENTERSIZEMOVE:
-        m_AppPaused = true;
-        m_isResizing = true;
-        m_Timer.Stop();
-        break;
-
-    // WM_EXITSIZEMOVE is sent when the user releases the resize bars.
-    // Here we reset everything based on the new window dimensions.
-    case WM_EXITSIZEMOVE:
-        m_AppPaused = false;
-        m_isResizing = false;
-        m_Timer.Start();
-        m_Resize = true;
-        break;
-
-    // Catch this message so to prevent the window from becoming too small.
-    case WM_GETMINMAXINFO:
-        ((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
-        ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
-        break;
-
-    case WM_CLOSE: // Handle manual window close
-        m_GameExit = true;
-        break;
+        return false;
     }
 
-    return DefWindowProcW(wnd, msg, wParam, lParam);
+    // Create Device
+    if (FAILED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Device))))
+    {
+        //m_Device->CheckFeatureSupport(---);
+
+        //PrintDeviceSupportLevel();
+
+        printf("-- FAILED TO CREATE DX12 DEVICE --\n");
+
+        return false;
+    }
+
+    // Create command queue descriptor and use it to create a command queue
+    D3D12_COMMAND_QUEUE_DESC cmdQueueDesc{};
+    cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT; // Direct is general purpose probably not best perf everywhere, use more specific types later on
+    cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_HIGH; // Normal is for normal apps, High is for games, Global real-time not sure what this is
+    cmdQueueDesc.NodeMask = 0; // 0 is default setting, node mask is basically what gpu is being used
+    cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE; // None and gpu timeout, gpu timeout cancels work after some amount of time where no tasks are completed?
+
+    if (FAILED(m_Device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&m_CmdQueue))))
+    {
+        printf("-- FAILED TO CREATE COMMAND QUEUE --\n");
+        return false;
+    }
+
+    // Create a fence
+    // A fence does not need a descriptor when created
+    if (FAILED(m_Device->CreateFence(m_FenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence))))
+    {
+        printf("-- FAILED TO CREATE FENCE --\n");
+        return false;
+    }
+
+    // Fence event
+    m_FenceEvent = CreateEvent(nullptr, false, false, nullptr);
+    assert(m_FenceEvent != nullptr);
+
+    // Command allocator
+    if (FAILED(m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocator))))
+    {
+        return false;
+    }
+
+    // Command list
+    if (FAILED(m_Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&m_CmdList))))
+    {
+        return false;
+    }
+    else
+    {
+        //PrintCommandListSupportLevel();
+    }
+
+    LogAdapters();
+
+    return true;
+}
+
+ID3D12GraphicsCommandList6* DXWindow::InitCommandList()
+{
+    // Reset allocator and command list
+    m_CmdAllocator->Reset();
+    m_CmdList->Reset(m_CmdAllocator, nullptr);
+
+    return m_CmdList;
+}
+
+void DXWindow::ExecuteCommandList()
+{
+    // Need to close the list before execution
+    if (SUCCEEDED(m_CmdList->Close()))
+    {
+        ID3D12CommandList* lists[] = { m_CmdList };
+        m_CmdQueue->ExecuteCommandLists(1, lists);
+
+        SignalAndWait();
+    }
+}
+
+void DXWindow::CreateCommandObjects()
+{
+
+}
+
+void DXWindow::CreateSwapChain()
+{
+
+}
+
+void DXWindow::SignalAndWait()
+{
+    m_CmdQueue->Signal(m_Fence, ++m_FenceValue);
+
+    // Fence notifies the event when it gets a completion signal
+    if (SUCCEEDED(m_Fence->SetEventOnCompletion(m_FenceValue, m_FenceEvent)))
+    {
+        // If event isn't notified within 20s, close
+        if (WaitForSingleObject(m_FenceEvent, 20000) != WAIT_OBJECT_0)
+        {
+            std::exit(-1);
+        }
+    }
+    else
+    {
+        // End the program
+        std::exit(-1);
+    }
+}
+
+void DXWindow::LogAdapters()
+{
+    UINT i = 0;
+    IDXGIAdapter* adapter = nullptr;
+    std::vector<IDXGIAdapter*> adapterList;
+    while (m_DxgiFactory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND)
+    {
+        DXGI_ADAPTER_DESC desc;
+        adapter->GetDesc(&desc);
+
+        std::wstring text = L"***Adapter: ";
+        text += desc.Description;
+        text += L"\n";
+
+        OutputDebugString(text.c_str());
+
+        adapterList.push_back(adapter);
+
+        ++i;
+    }
+
+    for (size_t i = 0; i < adapterList.size(); ++i)
+    {
+        LogAdapterOutputs(adapterList[i]);
+        ReleaseCom(adapterList[i]);
+    }
+}
+
+void DXWindow::LogAdapterOutputs(IDXGIAdapter* adapter)
+{
+    UINT i = 0;
+    IDXGIOutput* output = nullptr;
+    while (adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND)
+    {
+        DXGI_OUTPUT_DESC desc;
+        output->GetDesc(&desc);
+
+        std::wstring text = L"***Output: ";
+        text += desc.DeviceName;
+        text += L"\n";
+        OutputDebugString(text.c_str());
+
+        // Hard set format for now, but it will eventually be a protected member to be specified by user
+        LogOutputDisplayModes(output, DXGI_FORMAT_R8G8B8A8_UNORM);
+
+        ReleaseCom(output);
+
+        ++i;
+    }
+}
+
+void DXWindow::LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format)
+{
+    UINT count = 0;
+    UINT flags = 0;
+
+    // Call with nullptr to get list count.
+    output->GetDisplayModeList(format, flags, &count, nullptr);
+
+    std::vector<DXGI_MODE_DESC> modeList(count);
+    output->GetDisplayModeList(format, flags, &count, &modeList[0]);
+
+    for (auto& x : modeList)
+    {
+        UINT n = x.RefreshRate.Numerator;
+        UINT d = x.RefreshRate.Denominator;
+        std::wstring text =
+            L"Width = " + std::to_wstring(x.Width) + L" " +
+            L"Height = " + std::to_wstring(x.Height) + L" " +
+            L"Refresh = " + std::to_wstring(n) + L"/" + std::to_wstring(d) +
+            L"\n";
+
+        ::OutputDebugString(text.c_str());
+    }
+}
+
+void DXWindow::PrintDeviceSupportLevel()
+{
+    // Check Device support
+    ComPointer<ID3D12Device1> dev1;
+    HRESULT hr;
+    if (m_Device.QueryInterface(dev1, &hr))
+    {
+        printf("ID3D12 Device 1 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 1 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device2> dev2;
+    if (m_Device.QueryInterface(dev2, &hr))
+    {
+        printf("ID3D12 Device 2 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 2 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device3> dev3;
+    if (m_Device.QueryInterface(dev3, &hr))
+    {
+        printf("ID3D12 Device 3 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 3 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device4> dev4;
+    if (m_Device.QueryInterface(dev4, &hr))
+    {
+        printf("ID3D12 Device 4 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 4 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device5> dev5;
+    if (m_Device.QueryInterface(dev5, &hr))
+    {
+        printf("ID3D12 Device 5 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 5 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device6> dev6;
+    if (m_Device.QueryInterface(dev6, &hr))
+    {
+        printf("ID3D12 Device 6 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 6 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device7> dev7;
+    if (m_Device.QueryInterface(dev7, &hr))
+    {
+        printf("ID3D12 Device 7 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 7 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device8> dev8;
+    if (m_Device.QueryInterface(dev8, &hr))
+    {
+        printf("ID3D12 Device 8 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 8 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device9> dev9;
+    if (m_Device.QueryInterface(dev9, &hr))
+    {
+        printf("ID3D12 Device 9 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 9 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12Device10> dev10;
+    if (m_Device.QueryInterface(dev10, &hr))
+    {
+        printf("ID3D12 Device 10 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Device 10 is NOT supported.\n");
+    }
+}
+
+void DXWindow::PrintCommandListSupportLevel()
+{
+    ComPointer<ID3D12GraphicsCommandList1> cmdList1;
+    HRESULT hr;
+
+    if (m_CmdList.QueryInterface(cmdList1, &hr))
+    {
+        printf("ID3D12 Command List 1 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 1 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList2> cmdList2;
+    if (m_CmdList.QueryInterface(cmdList2, &hr))
+    {
+        printf("ID3D12 Command List 2 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 2 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList3> cmdList3;
+    if (m_CmdList.QueryInterface(cmdList3, &hr))
+    {
+        printf("ID3D12 Command List 3 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 3 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList4> cmdList4;
+    if (m_CmdList.QueryInterface(cmdList4, &hr))
+    {
+        printf("ID3D12 Command List 4 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 4 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList5> cmdList5;
+    if (m_CmdList.QueryInterface(cmdList5, &hr))
+    {
+        printf("ID3D12 Command List 5 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 5 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList6> cmdList6;
+    if (m_CmdList.QueryInterface(cmdList6, &hr))
+    {
+        printf("ID3D12 Command List 6 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 6 is NOT supported.\n");
+    }
+
+    ComPointer<ID3D12GraphicsCommandList7> cmdList7;
+    if (m_CmdList.QueryInterface(cmdList7, &hr))
+    {
+        printf("ID3D12 Command List 7 is supported.\n");
+    }
+    else
+    {
+        printf("ID3D12 Command List 7 is NOT supported.\n");
+    }
 }
 
 bool DXWindow::GetBuffers()
@@ -502,7 +925,7 @@ bool DXWindow::GetBuffers()
         rtvDesc.Texture2D.MipSlice = 0;
         rtvDesc.Texture2D.PlaneSlice = 0;
 
-        DXContext::GetDXContext().GetDevice()->CreateRenderTargetView(m_Buffers[i], &rtvDesc, m_rtvHandles[i]);
+        m_Device->CreateRenderTargetView(m_Buffers[i], &rtvDesc, m_rtvHandles[i]);
     }
 
     return true;
