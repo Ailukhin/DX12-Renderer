@@ -27,6 +27,11 @@ public:
 	bool Get4xMsaaState()const;
 	void Set4xMsaaState(bool value);
 
+	inline float AspectRatio()const
+	{
+		return static_cast<float>(m_Width) / m_Height;
+	}
+
 	inline bool GameExit() const
 	{
 		return m_GameExit;
@@ -102,7 +107,7 @@ protected:
 	void PrintCommandListSupportLevel();
 
 private:
-	bool GetBuffers();
+	bool CreateRtvAndDsvBuffers();
 	void ReleaseBuffers();
 
 protected:
@@ -142,15 +147,26 @@ protected:
 	static constexpr UINT m_BufferCount = 2;
 	UINT m_CurrentBufferIndex = 0;
 
-	// Render target view descriptor heap
-	ComPointer<ID3D12DescriptorHeap> m_rtvDescHeap;
+	// Render target view and despth stencil view descriptor heaps
+	ComPointer<ID3D12DescriptorHeap> m_RtvDescHeap;
+	ComPointer<ID3D12DescriptorHeap> m_DsvDescHeap;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_rtvHandles[m_BufferCount] = { 0 };
+	D3D12_CPU_DESCRIPTOR_HANDLE m_RtvHandles[m_BufferCount] = { 0 };
+	D3D12_CPU_DESCRIPTOR_HANDLE m_DsvHandle = { 0 };
 
 	ComPointer<ID3D12Device8> m_Device;
 	ComPointer<IDXGIFactory7> m_DxgiFactory;
 	ComPointer<IDXGISwapChain3> m_SwapChain;
+
 	ComPointer<ID3D12Resource2> m_Buffers[m_BufferCount];
+	ComPointer<ID3D12Resource2> m_DepthStencilBuffer;
+
+	D3D12_VIEWPORT vp;
+	D3D12_RECT scRect;
+
+	UINT mRtvDescriptorSize = 0;
+	UINT mDsvDescriptorSize = 0;
+	UINT mCbvSrvUavDescriptorSize = 0;
 
 	ComPointer<ID3D12CommandQueue> m_CmdQueue;
 	ComPointer<ID3D12CommandAllocator> m_CmdAllocator;

@@ -109,7 +109,8 @@ void DXWindow::Shutdown()
     //
     ReleaseBuffers();
 
-    m_rtvDescHeap.Release();
+    m_RtvDescHeap.Release();
+    m_DsvDescHeap.Release();
 
     m_SwapChain.Release();
 
@@ -302,34 +303,59 @@ void DXWindow::ResizeBuffers()
     }
 
     // Now get new buffer references after resize
-    GetBuffers();
+    CreateRtvAndDsvBuffers();
+
+    // Viewport for client area
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    vp.Width = (float)m_Width;
+    vp.Height = (float)m_Height;
+    vp.MinDepth = 1.0f;
+    vp.MaxDepth = 0.0f;
+
+    scRect.left = 0;
+    scRect.top = 0;
+    scRect.right = m_Width;
+    scRect.bottom = m_Height;
 }
 
 bool DXWindow::CreateRtvAndDsvDescriptorHeaps()
 {
     // Create Render Target View Heap
-    D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc{};
-    descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    descHeapDesc.NumDescriptors = m_BufferCount;
-    descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    descHeapDesc.NodeMask = 0;
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{};
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.NumDescriptors = m_BufferCount;
+    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    rtvHeapDesc.NodeMask = 0;
 
-    if (FAILED(m_Device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
+    if (FAILED(m_Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RtvDescHeap))))
     {
         return false;
     }
 
-    // Create handles to view
-    auto firstHandle = m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-    auto handleIncrement = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
+    // Handles for render target views
     for (size_t i = 0; i < m_BufferCount; i++)
     {
-        m_rtvHandles[i] = firstHandle;
-        m_rtvHandles[i].ptr += handleIncrement * i;
+        m_RtvHandles[i] = m_RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+        m_RtvHandles[i].ptr += mRtvDescriptorSize * i;
     }
 
-    if (!GetBuffers())
+    // Depth stencil view heap
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc{};
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.NumDescriptors = 1;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    dsvHeapDesc.NodeMask = 0;
+
+    if (FAILED(m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DsvDescHeap))))
+    {
+        return false;
+    }
+
+    // Handle for depth stencil view
+    m_DsvHandle = m_DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+    if (!CreateRtvAndDsvBuffers())
     {
         return false;
     }
@@ -377,7 +403,7 @@ bool DXWindow::CreateSwapChain()
     DXGI_SWAP_CHAIN_DESC1 swap_desc{};
     swap_desc.Width = 2560;
     swap_desc.Height = 1440;
-    swap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // Normal format for 8 bits in each color channel
+    swap_desc.Format = mBackBufferFormat; // Normal format for 8 bits in each color channel
     swap_desc.Stereo = false;
     swap_desc.SampleDesc.Count = 1; // 1 pixel per pixel
     swap_desc.SampleDesc.Quality = 0; // Multisampling (anti-aliasing), 1 yes, 0 no
@@ -490,6 +516,7 @@ void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
     // Update the current buffer index to start drawing the frame to the correct buffer
     m_CurrentBufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
 
+    // State transition on resource usage to render_target for the back buffer to now be rendered to
     D3D12_RESOURCE_BARRIER barrier;
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -498,17 +525,20 @@ void DXWindow::BeginFrame(ID3D12GraphicsCommandList6* cmdList)
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-
     cmdList->ResourceBarrier(1, &barrier);
-
+    
+    // Clear back buffer and depth buffer
     float clearColor[] = { 0.6f, 0.8f, 0.9f, 1.0f };
-    cmdList->ClearRenderTargetView(m_rtvHandles[m_CurrentBufferIndex], clearColor, 0, nullptr);
+    cmdList->ClearRenderTargetView(m_RtvHandles[m_CurrentBufferIndex], clearColor, 0, nullptr);
+    cmdList->ClearDepthStencilView(m_DsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-    cmdList->OMSetRenderTargets(1, &m_rtvHandles[m_CurrentBufferIndex], false, nullptr);
+    // Specify the buffer that will now be rendered to
+    cmdList->OMSetRenderTargets(1, &m_RtvHandles[m_CurrentBufferIndex], false, &m_DsvHandle);
 }
 
 void DXWindow::EndFrame(ID3D12GraphicsCommandList6* cmdList)
 {
+    // State transition on resource usage to present for the back buffer which is now ready to present
     D3D12_RESOURCE_BARRIER barrier;
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -615,6 +645,10 @@ bool DXWindow::InitD3D()
     m_FenceEvent = CreateEvent(nullptr, false, false, nullptr);
     assert(m_FenceEvent != nullptr);
 
+    // Descriptor handle sizes
+    mRtvDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    mDsvDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    mCbvSrvUavDescriptorSize = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     if (!CreateCommandObjects())
     {
@@ -652,8 +686,9 @@ void DXWindow::ExecuteCommandList()
     // Need to close the list before execution
     if (SUCCEEDED(m_CmdList->Close()))
     {
+        // Add command lists to queue for execution
         ID3D12CommandList* lists[] = { m_CmdList };
-        m_CmdQueue->ExecuteCommandLists(1, lists);
+        m_CmdQueue->ExecuteCommandLists(_countof(lists), lists);
 
         SignalAndWait();
     }
@@ -935,8 +970,11 @@ void DXWindow::PrintCommandListSupportLevel()
     }
 }
 
-bool DXWindow::GetBuffers()
+bool DXWindow::CreateRtvAndDsvBuffers()
 {
+    ID3D12GraphicsCommandList6* cmdList = InitCommandList();
+
+    // Rtv
     for (UINT i = 0; i < m_BufferCount; i++)
     {
         if (FAILED(m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_Buffers[i]))))
@@ -950,8 +988,61 @@ bool DXWindow::GetBuffers()
         rtvDesc.Texture2D.MipSlice = 0;
         rtvDesc.Texture2D.PlaneSlice = 0;
 
-        m_Device->CreateRenderTargetView(m_Buffers[i], &rtvDesc, m_rtvHandles[i]);
+        m_Device->CreateRenderTargetView(m_Buffers[i], &rtvDesc, m_RtvHandles[i]);
     }
+
+    // Dsv
+    D3D12_RESOURCE_DESC depthStencilDesc;
+    depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    depthStencilDesc.Alignment = 0;
+    depthStencilDesc.Width = m_Width;
+    depthStencilDesc.Height = m_Height;
+    depthStencilDesc.DepthOrArraySize = 1;
+    depthStencilDesc.MipLevels = 1;
+    depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+    depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
+    depthStencilDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+    depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+    D3D12_CLEAR_VALUE optClear;
+    optClear.Format = mDepthStencilFormat;
+    optClear.DepthStencil.Depth = 1.0f;
+    optClear.DepthStencil.Stencil = 0;
+
+    D3D12_HEAP_PROPERTIES hpDefault{};
+    hpDefault.Type = D3D12_HEAP_TYPE_DEFAULT;
+    hpDefault.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    hpDefault.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    hpDefault.CreationNodeMask = 0;
+    hpDefault.VisibleNodeMask = 0;
+    
+    m_Device->CreateCommittedResource(&hpDefault, D3D12_HEAP_FLAG_NONE, &depthStencilDesc, D3D12_RESOURCE_STATE_COMMON, &optClear, IID_PPV_ARGS(&m_DepthStencilBuffer));
+
+    // Create descriptor to mip level 0 of entire resource using the format of the resource.
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Format = mDepthStencilFormat;
+    dsvDesc.Texture2D.MipSlice = 0;
+    m_Device->CreateDepthStencilView(m_DepthStencilBuffer, &dsvDesc, m_DsvHandle);
+
+    // Transition the resource from its initial state to be used as a depth buffer.
+    D3D12_RESOURCE_BARRIER barrier;
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = m_DepthStencilBuffer;
+    barrier.Transition.Subresource = 0;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+
+    cmdList->ResourceBarrier(1, &barrier);
+
+    // Execute resize commands
+    ExecuteCommandList();
+
+    // Wait until resize is done
+    FlushCommandQueue(GetBufferCount());
 
     return true;
 }
@@ -962,4 +1053,6 @@ void DXWindow::ReleaseBuffers()
     {
         m_Buffers[i].Release();
     }
+
+    m_DepthStencilBuffer.Release();
 }

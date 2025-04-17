@@ -140,7 +140,7 @@ bool GameApp::Init()
     gfxPsoDesc.RTVFormats[5] = DXGI_FORMAT_UNKNOWN;
     gfxPsoDesc.RTVFormats[6] = DXGI_FORMAT_UNKNOWN;
     gfxPsoDesc.RTVFormats[7] = DXGI_FORMAT_UNKNOWN;
-    gfxPsoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    gfxPsoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     gfxPsoDesc.BlendState.AlphaToCoverageEnable = false;
     gfxPsoDesc.BlendState.IndependentBlendEnable = false;
     gfxPsoDesc.BlendState.RenderTarget[0].BlendEnable = true;
@@ -201,35 +201,22 @@ void GameApp::Draw(const GameTimer& timer)
         ResizeBuffers();
     }
 
-    // Prepare the command list for drawing
+    // Prepare the command list and command allocator for drawing
     cmdList = InitCommandList();
 
     // Begin drawing frame
     BeginFrame(cmdList);
 
-    // Pipeline state
+    // Pipeline state for rendering the triangle
     cmdList->SetPipelineState(pso);
     cmdList->SetGraphicsRootSignature(rootSignature);
 
-    // Input assembly
+    // Input assembly for triangle data
     cmdList->IASetVertexBuffers(0, 1, &vbv);
     cmdList->IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // Raster
-    D3D12_VIEWPORT vp;
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
-    vp.Width = (FLOAT)GetWindowWidth();
-    vp.Height = (FLOAT)GetWindowHeight();
-    vp.MinDepth = 1.0f;
-    vp.MaxDepth = 0.0f;
+    // Set viewport and scissor rect, needs to be reset whenever command list is reset
     cmdList->RSSetViewports(1, &vp);
-
-    RECT scRect;
-    scRect.left = 0;
-    scRect.top = 0;
-    scRect.right = GetWindowWidth();
-    scRect.bottom = GetWindowHeight();
     cmdList->RSSetScissorRects(1, &scRect);
 
     // Root arguments
