@@ -101,6 +101,7 @@ public:
 			m_pointer->AddRef();
 			return m_pointer;
 		}
+
 		return nullptr;
 	}
 
@@ -118,6 +119,7 @@ public:
 			if (errorCode) *errorCode = result;
 			return result == S_OK;
 		}
+
 		return false;
 	}
 
