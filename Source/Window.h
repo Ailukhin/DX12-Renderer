@@ -1,4 +1,4 @@
-#include "WinInclude.h"
+#include "D3D_UTIL.h"
 #include "ComPointer.h"
 #include <cassert>
 #include "GameTimer.h"
@@ -60,9 +60,11 @@ public:
 protected:
 	virtual void Update(const GameTimer& timer) = 0;
 	virtual void Draw(const GameTimer& timer) = 0;
-	void Resize();
+	virtual void ResizeBuffers();
 
-	virtual void CreateRtvAndDsvDescriptorHeaps();
+	virtual bool CreateRtvAndDsvDescriptorHeaps();
+	bool CreateCommandObjects();
+	bool CreateSwapChain();
 
 	virtual void Shutdown();
 
@@ -81,9 +83,6 @@ protected:
 
 	ID3D12GraphicsCommandList6* InitCommandList();
 	void ExecuteCommandList();
-
-	void CreateCommandObjects();
-	void CreateSwapChain();
 
 	void SignalAndWait();
 

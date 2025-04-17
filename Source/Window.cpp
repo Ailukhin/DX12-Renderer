@@ -86,131 +86,18 @@ bool DXWindow::Init()
     }
 #endif
 
+    if (!InitWindow())
+    {
+        return false;
+    }
+
     if (!InitD3D())
     {
         return false;
     }
 
-    WNDCLASSEXW wnd{};
-    wnd.cbSize = sizeof(wnd);
-    wnd.style = CS_OWNDC;
-    wnd.lpfnWndProc = MainWndProc; // Callback function for WNDPROC
-    wnd.cbClsExtra = 0; // Something about additional memory
-    wnd.cbWndExtra = 0; // Something about additional memory
-    wnd.hInstance = GetModuleHandle(nullptr); // Executable handle
-    wnd.hIcon = LoadIconW(nullptr, IDI_APPLICATION); // Art icon for the window - IDI_APPLICATION provided by windows
-    wnd.hCursor = LoadCursorW(nullptr, IDC_ARROW); // Art for cursor - IDC_ARROW provided by windows
-    wnd.hbrBackground = nullptr; // Redraw background color in window when resized, not needed when using dx12
-    wnd.lpszMenuName = nullptr; // Not using a menu
-    wnd.lpszClassName = L"D3D12ExWndCls";
-    wnd.hIconSm = LoadIconW(nullptr, IDI_APPLICATION); // Another icon
-    
-    // Register the window class on os
-    m_WndClass = RegisterClassExW(&wnd);
-
-    if (m_WndClass == 0)
-    {
-        return false;
-    }
-
-    // Start window on the monitor where the cursor is
-    /*POINT pos{ 0, 0 };
-    GetCursorPos(&pos);
-
-    HMONITOR monitorHandle = MonitorFromPoint(pos, MONITOR_DEFAULTTOPRIMARY);
-
-    MONITORINFO monitorInfo{};
-    monitorInfo.cbSize = sizeof(monitorInfo);
-
-    GetMonitorInfoW(monitorHandle, &monitorInfo);*/
-
-    // For x and y below if above is uncommented
-    // x - monitorInfo.rcWork.left + 100
-    // y - monitorInfo.rcWork.top + 100
-
-    // Actually create the window
-    // WS_EX_OVERLAPPEDWINDOW is default window
-    m_Window = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW, // window style
-                              (LPCWSTR)m_WndClass, // Window class name that was just registered
-                              m_WindowCaption.c_str(), // Name of window
-                              WS_OVERLAPPEDWINDOW | WS_VISIBLE, // something else to do with window style
-                              0, // x position of monitor, starts from top left
-                              0, // y position of monitor, starts from top left
-                              2560, // Width
-                              1440, // Height
-                              nullptr, // Window parent
-                              nullptr, // Window menu
-                              wnd.hInstance, // Window instance
-                              nullptr);
-
-    
-    if (m_Window == nullptr)
-    {
-        return false;
-    }
-    
-
-    // Swap chain descriptor
-    DXGI_SWAP_CHAIN_DESC1 swap_desc{};
-    swap_desc.Width = 2560;
-    swap_desc.Height = 1440;
-    swap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // Normal format for 8 bits in each color channel
-    swap_desc.Stereo = false;
-    swap_desc.SampleDesc.Count = 1; // 1 pixel per pixel
-    swap_desc.SampleDesc.Quality = 0; // Multisampling (anti-aliasing), 1 yes, 0 no
-    swap_desc.BufferUsage = DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_RENDER_TARGET_OUTPUT; // Back buffer to write to as the render target
-    swap_desc.BufferCount = 2; // 2 buffers for swapping, front is displayed while back is being written to - "swap chain"
-                               // 3 used for vsync to help prevent tearing 
-                               // with vsync, must wait for monitor to finish using a buffer, completed buffer will be waiting for sawp while 3rd is being written to
-                               // Vsync is basically doing work ahead of time and waiting to make sure the buffer swap is smooth
-    swap_desc.Scaling = DXGI_SCALING_STRETCH; // How the swap chain behaves if the window is resized
-    swap_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // How swapping the buffers is handled
-    swap_desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE; // Mode for alpha blending
-    swap_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING; // Allow swap chain to be modifiable, allow tearing aka no vsync
-
-    // Full screen swap chain descriptor
-    DXGI_SWAP_CHAIN_FULLSCREEN_DESC swap_fullscreen_desc{};
-    //swap_fullscreen_desc.RefreshRate; // These 3 values not used since widowed = true
-    //swap_fullscreen_desc.ScanlineOrdering;
-    //swap_fullscreen_desc.Scaling;
-    swap_fullscreen_desc.Windowed = true;
-
-    ComPointer<IDXGISwapChain1> swapChain1;
-    
-    // Set up swap chain
-    m_DxgiFactory->CreateSwapChainForHwnd(m_CmdQueue, m_Window, &swap_desc, &swap_fullscreen_desc, nullptr, &swapChain1);
-
-    if (!swapChain1.QueryInterface(m_SwapChain))
-    {
-        return false;
-    }
-
-    // Create Render Target View Heap
-    D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc{};
-    descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    descHeapDesc.NumDescriptors = m_BufferCount;
-    descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    descHeapDesc.NodeMask = 0;
-
-    if (FAILED(m_Device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
-    {
-        return false;
-    }
-
-    // Create handles to view
-    auto firstHandle = m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-    auto handleIncrement = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    for (size_t i = 0; i < m_BufferCount; i++)
-    {
-        m_rtvHandles[i] = firstHandle;
-        m_rtvHandles[i].ptr += handleIncrement * i;
-    }
-
-    if (!GetBuffers())
-    {
-        return false;
-    }
+    // Do initial resize
+    ResizeBuffers();
 
     return true;
 }
@@ -386,7 +273,7 @@ void DXWindow::Set4xMsaaState(bool value)
 
         // Recreate the swapchain and buffers with new multisample settings.
         CreateSwapChain();
-        Resize();
+        ResizeBuffers();
     }
 }
 
@@ -397,7 +284,7 @@ void DXWindow::Present()
     m_SwapChain->Present(1, 0);
 }
 
-void DXWindow::Resize()
+void DXWindow::ResizeBuffers()
 {
     // Buffer references must be released before resizing
     ReleaseBuffers();
@@ -418,9 +305,110 @@ void DXWindow::Resize()
     GetBuffers();
 }
 
-void DXWindow::CreateRtvAndDsvDescriptorHeaps()
+bool DXWindow::CreateRtvAndDsvDescriptorHeaps()
 {
+    // Create Render Target View Heap
+    D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc{};
+    descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    descHeapDesc.NumDescriptors = m_BufferCount;
+    descHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    descHeapDesc.NodeMask = 0;
 
+    if (FAILED(m_Device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&m_rtvDescHeap))))
+    {
+        return false;
+    }
+
+    // Create handles to view
+    auto firstHandle = m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+    auto handleIncrement = m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    for (size_t i = 0; i < m_BufferCount; i++)
+    {
+        m_rtvHandles[i] = firstHandle;
+        m_rtvHandles[i].ptr += handleIncrement * i;
+    }
+
+    if (!GetBuffers())
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool DXWindow::CreateCommandObjects()
+{
+    // Create command queue descriptor and use it to create a command queue
+    D3D12_COMMAND_QUEUE_DESC cmdQueueDesc{};
+    cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT; // Direct is general purpose probably not best perf everywhere, use more specific types later on
+    cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_HIGH; // Normal is for normal apps, High is for games, Global real-time not sure what this is
+    cmdQueueDesc.NodeMask = 0; // 0 is default setting, node mask is basically what gpu is being used
+    cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE; // None and gpu timeout, gpu timeout cancels work after some amount of time where no tasks are completed?
+
+    if (FAILED(m_Device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&m_CmdQueue))))
+    {
+        printf("-- FAILED TO CREATE COMMAND QUEUE --\n");
+        return false;
+    }
+
+    // Command allocator
+    if (FAILED(m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocator))))
+    {
+        return false;
+    }
+
+    // Command list
+    if (FAILED(m_Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&m_CmdList))))
+    {
+        return false;
+    }
+    else
+    {
+        //PrintCommandListSupportLevel();
+    }
+
+    return true;
+}
+
+bool DXWindow::CreateSwapChain()
+{
+    // Swap chain descriptor
+    DXGI_SWAP_CHAIN_DESC1 swap_desc{};
+    swap_desc.Width = 2560;
+    swap_desc.Height = 1440;
+    swap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // Normal format for 8 bits in each color channel
+    swap_desc.Stereo = false;
+    swap_desc.SampleDesc.Count = 1; // 1 pixel per pixel
+    swap_desc.SampleDesc.Quality = 0; // Multisampling (anti-aliasing), 1 yes, 0 no
+    swap_desc.BufferUsage = DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_RENDER_TARGET_OUTPUT; // Back buffer to write to as the render target
+    swap_desc.BufferCount = 2; // 2 buffers for swapping, front is displayed while back is being written to - "swap chain"
+    // 3 used for vsync to help prevent tearing 
+    // with vsync, must wait for monitor to finish using a buffer, completed buffer will be waiting for sawp while 3rd is being written to
+    // Vsync is basically doing work ahead of time and waiting to make sure the buffer swap is smooth
+    swap_desc.Scaling = DXGI_SCALING_STRETCH; // How the swap chain behaves if the window is resized
+    swap_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // How swapping the buffers is handled
+    swap_desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE; // Mode for alpha blending
+    swap_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING; // Allow swap chain to be modifiable, allow tearing aka no vsync
+
+    // Full screen swap chain descriptor
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC swap_fullscreen_desc{};
+    //swap_fullscreen_desc.RefreshRate; // These 3 values not used since widowed = true
+    //swap_fullscreen_desc.ScanlineOrdering;
+    //swap_fullscreen_desc.Scaling;
+    swap_fullscreen_desc.Windowed = true;
+
+    ComPointer<IDXGISwapChain1> swapChain1;
+
+    // Set up swap chain
+    m_DxgiFactory->CreateSwapChainForHwnd(m_CmdQueue, m_Window, &swap_desc, &swap_fullscreen_desc, nullptr, &swapChain1);
+
+    if (!swapChain1.QueryInterface(m_SwapChain))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 void DXWindow::SetFullScreen(bool enable)
@@ -534,7 +522,65 @@ void DXWindow::EndFrame(ID3D12GraphicsCommandList6* cmdList)
 
 bool DXWindow::InitWindow()
 {
-    return false;
+    WNDCLASSEXW wnd{};
+    wnd.cbSize = sizeof(wnd);
+    wnd.style = CS_OWNDC;
+    wnd.lpfnWndProc = MainWndProc; // Callback function for WNDPROC
+    wnd.cbClsExtra = 0; // Something about additional memory
+    wnd.cbWndExtra = 0; // Something about additional memory
+    wnd.hInstance = GetModuleHandle(nullptr); // Executable handle
+    wnd.hIcon = LoadIconW(nullptr, IDI_APPLICATION); // Art icon for the window - IDI_APPLICATION provided by windows
+    wnd.hCursor = LoadCursorW(nullptr, IDC_ARROW); // Art for cursor - IDC_ARROW provided by windows
+    wnd.hbrBackground = nullptr; // Redraw background color in window when resized, not needed when using dx12
+    wnd.lpszMenuName = nullptr; // Not using a menu
+    wnd.lpszClassName = L"D3D12ExWndCls";
+    wnd.hIconSm = LoadIconW(nullptr, IDI_APPLICATION); // Another icon
+
+    // Register the window class on os
+    m_WndClass = RegisterClassExW(&wnd);
+
+    if (m_WndClass == 0)
+    {
+        return false;
+    }
+
+    // Start window on the monitor where the cursor is
+    /*POINT pos{ 0, 0 };
+    GetCursorPos(&pos);
+
+    HMONITOR monitorHandle = MonitorFromPoint(pos, MONITOR_DEFAULTTOPRIMARY);
+
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+
+    GetMonitorInfoW(monitorHandle, &monitorInfo);*/
+
+    // For x and y below if above is uncommented
+    // x - monitorInfo.rcWork.left + 100
+    // y - monitorInfo.rcWork.top + 100
+
+    // Actually create the window
+    // WS_EX_OVERLAPPEDWINDOW is default window
+    m_Window = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW, // window style
+        (LPCWSTR)m_WndClass, // Window class name that was just registered
+        m_WindowCaption.c_str(), // Name of window
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE, // something else to do with window style
+        0, // x position of monitor, starts from top left
+        0, // y position of monitor, starts from top left
+        2560, // Width
+        1440, // Height
+        nullptr, // Window parent
+        nullptr, // Window menu
+        wnd.hInstance, // Window instance
+        nullptr);
+
+
+    if (m_Window == nullptr)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 bool DXWindow::InitD3D()
@@ -557,19 +603,6 @@ bool DXWindow::InitD3D()
         return false;
     }
 
-    // Create command queue descriptor and use it to create a command queue
-    D3D12_COMMAND_QUEUE_DESC cmdQueueDesc{};
-    cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT; // Direct is general purpose probably not best perf everywhere, use more specific types later on
-    cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_HIGH; // Normal is for normal apps, High is for games, Global real-time not sure what this is
-    cmdQueueDesc.NodeMask = 0; // 0 is default setting, node mask is basically what gpu is being used
-    cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE; // None and gpu timeout, gpu timeout cancels work after some amount of time where no tasks are completed?
-
-    if (FAILED(m_Device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&m_CmdQueue))))
-    {
-        printf("-- FAILED TO CREATE COMMAND QUEUE --\n");
-        return false;
-    }
-
     // Create a fence
     // A fence does not need a descriptor when created
     if (FAILED(m_Device->CreateFence(m_FenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence))))
@@ -582,23 +615,25 @@ bool DXWindow::InitD3D()
     m_FenceEvent = CreateEvent(nullptr, false, false, nullptr);
     assert(m_FenceEvent != nullptr);
 
-    // Command allocator
-    if (FAILED(m_Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocator))))
+
+    if (!CreateCommandObjects())
     {
         return false;
     }
 
-    // Command list
-    if (FAILED(m_Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&m_CmdList))))
+    if (!CreateSwapChain())
     {
         return false;
     }
-    else
-    {
-        //PrintCommandListSupportLevel();
-    }
 
+    if (!CreateRtvAndDsvDescriptorHeaps())
+    {
+        return false;
+    }
+    
+#ifdef _DEBUG
     LogAdapters();
+#endif
 
     return true;
 }
@@ -622,16 +657,6 @@ void DXWindow::ExecuteCommandList()
 
         SignalAndWait();
     }
-}
-
-void DXWindow::CreateCommandObjects()
-{
-
-}
-
-void DXWindow::CreateSwapChain()
-{
-
 }
 
 void DXWindow::SignalAndWait()
