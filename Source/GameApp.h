@@ -19,6 +19,7 @@ public :
 private:
 	virtual void Update(const GameTimer& timer) override;
 	virtual void Draw(const GameTimer& timer) override;
+	virtual void ResizeBuffers() override;
 	virtual void Shutdown() override;
 
 private:

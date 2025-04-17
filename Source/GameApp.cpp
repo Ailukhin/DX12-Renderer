@@ -198,7 +198,7 @@ void GameApp::Draw(const GameTimer& timer)
         // Command queue must be flushed before resize
         FlushCommandQueue(GetBufferCount());
 
-        Resize();
+        ResizeBuffers();
     }
 
     // Prepare the command list for drawing
@@ -247,6 +247,12 @@ void GameApp::Draw(const GameTimer& timer)
     ExecuteCommandList();
 
     Present();
+}
+
+void GameApp::ResizeBuffers()
+{
+    // Nothing else in here for now, call base
+    DXWindow::ResizeBuffers();
 }
 
 void GameApp::Shutdown()

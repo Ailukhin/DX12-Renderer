@@ -1,4 +1,4 @@
-#include "WinInclude.h"
+#include "D3D_UTIL.h"
 #include "ComPointer.h"
 
 class DXDebugLayer
